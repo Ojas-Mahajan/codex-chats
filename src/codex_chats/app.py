@@ -95,47 +95,13 @@ class CodexChatsApp(App):
     def action_open_session(self) -> None:
         """Open the selected conversation in Codex."""
         if self._selected_conversation:
-            import shutil
             import subprocess
             from pathlib import Path
-            
-            cwd = self._selected_conversation.cwd or None
-            if cwd and not Path(cwd).is_dir():
-                cwd = None
-
-            cmd_str = f"codex resume {self._selected_conversation.id}"
-            
-            terminals = [
-                "x-terminal-emulator",
-                "ghostty",
-                "gnome-terminal",
-                "konsole",
-                "kitty",
-                "alacritty",
-                "terminator",
-                "xterm"
-            ]
-            
-            opened = False
-            for term in terminals:
-                if shutil.which(term):
-                    try:
-                        if term == "gnome-terminal":
-                            subprocess.Popen([term, "--tab", "--", "bash", "-c", cmd_str], cwd=cwd)
-                        elif term == "konsole":
-                            subprocess.Popen([term, "--new-tab", "-e", "bash", "-c", cmd_str], cwd=cwd)
-                        else:
-                            # Standard -e for most emulators (including ghostty, xterm, etc.)
-                            subprocess.Popen([term, "-e", "bash", "-c", cmd_str], cwd=cwd)
-                        
-                        opened = True
-                        self.notify(f"Opened in new terminal: {term}")
-                        break
-                    except Exception:
-                        continue
-                        
-            if not opened:
-                self.notify("Failed to find a terminal emulator to open a new tab.", severity="error")
+            with self.suspend():
+                cwd = self._selected_conversation.cwd or None
+                if cwd and not Path(cwd).is_dir():
+                    cwd = None
+                subprocess.run(["codex", "resume", self._selected_conversation.id], cwd=cwd)
 
     def action_focus_search(self) -> None:
         """Focus the search input."""
