@@ -1,10 +1,10 @@
-"""Parse overview.txt JSON-lines into structured Message objects."""
+"""Parse Codex session rollout JSONL files into structured Message objects."""
 
 from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -16,33 +16,34 @@ def parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
     if not ts:
         return None
     try:
-        # Handle "2026-05-04T11:39:53Z" format
         return datetime.fromisoformat(ts.replace("Z", "+00:00"))
     except (ValueError, TypeError):
         return None
 
 
-def extract_user_request(content: str) -> str:
-    """Extract the clean text from a <USER_REQUEST> block."""
-    match = re.search(r"<USER_REQUEST>\s*(.*?)\s*</USER_REQUEST>", content, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return content.strip()
+def extract_title(text: str, max_length: int = 60) -> str:
+    """Derive a conversation title from the first user message.
 
+    Cleans up skill references, URLs, XML tags, and excessive whitespace.
+    """
+    if not text:
+        return "Untitled"
 
-def extract_title_from_content(content: str, max_length: int = 60) -> str:
-    """Derive a conversation title from the first user message content."""
-    text = extract_user_request(content)
-
-    # Remove markdown, URLs, and excessive whitespace
+    # Remove skill references like [$skill-name](path)
+    text = re.sub(r"\[?\$[\w-]+\]?\([^)]*\)", "", text)
+    # Remove URLs
     text = re.sub(r"https?://\S+", "", text)
+    # Remove XML/HTML tags
+    text = re.sub(r"<[^>]+>", "", text)
+    # Remove markdown formatting
     text = re.sub(r"[#*`\[\]]", "", text)
+    # Collapse whitespace
     text = re.sub(r"\s+", " ", text).strip()
 
     if not text:
         return "Untitled"
 
-    # Take the first meaningful line
+    # Take the first line
     first_line = text.split("\n")[0].strip()
     if len(first_line) > max_length:
         first_line = first_line[:max_length].rsplit(" ", 1)[0] + "…"
@@ -50,63 +51,43 @@ def extract_title_from_content(content: str, max_length: int = 60) -> str:
     return first_line if first_line else "Untitled"
 
 
-def parse_tool_calls(raw_calls: list[dict]) -> list[ToolCall]:
-    """Parse raw tool call dictionaries into ToolCall objects."""
-    calls = []
-    for tc in raw_calls:
-        name = tc.get("name", "unknown")
-        args = tc.get("args", {})
-        # Clean up stringified args
-        cleaned_args = {}
-        for k, v in args.items():
-            if isinstance(v, str):
-                # Remove extra escaping from JSON strings
-                try:
-                    cleaned_args[k] = json.loads(v)
-                except (json.JSONDecodeError, TypeError):
-                    cleaned_args[k] = v
-            else:
-                cleaned_args[k] = v
-        calls.append(ToolCall(name=name, args=cleaned_args))
-    return calls
+def extract_message_text(content_list: list) -> str:
+    """Extract readable text from a Codex message content array.
 
-
-def clean_content(content: str) -> str:
-    """Clean message content for display — remove XML wrapper tags."""
-    if not content:
-        return ""
-
-    # Remove <USER_REQUEST> wrapper but keep content
-    text = extract_user_request(content)
-
-    # Remove <ADDITIONAL_METADATA> blocks entirely
-    text = re.sub(
-        r"<ADDITIONAL_METADATA>.*?</ADDITIONAL_METADATA>", "", text, flags=re.DOTALL
-    )
-
-    # Remove <USER_SETTINGS_CHANGE> blocks
-    text = re.sub(
-        r"<USER_SETTINGS_CHANGE>.*?</USER_SETTINGS_CHANGE>", "", text, flags=re.DOTALL
-    )
-
-    # Handle truncated markers
-    text = re.sub(r"<truncated \d+ bytes>", "[…truncated…]", text)
-
-    return text.strip()
-
-
-def parse_overview(path: Path) -> list[Message]:
-    """Parse an overview.txt JSON-lines file into a list of Message objects.
-
-    Each line in overview.txt is a JSON object representing one step in
-    the conversation.
+    Content items can have types: input_text, output_text, refusal, etc.
     """
-    messages = []
+    parts = []
+    for item in content_list:
+        if not isinstance(item, dict):
+            continue
+        item_type = item.get("type", "")
+        if item_type in ("input_text", "output_text"):
+            text = item.get("text", "")
+            # Skip system/environment context blocks
+            if text.startswith("<environment_context>"):
+                continue
+            if text.startswith("<permissions instructions>"):
+                continue
+            parts.append(text)
+        elif item_type == "refusal":
+            parts.append(f"[Refusal: {item.get('refusal', '')}]")
+    return "\n".join(parts)
+
+
+def parse_session_file(path: Path) -> tuple[dict, list[Message]]:
+    """Parse a Codex session rollout JSONL file.
+
+    Returns:
+        A tuple of (session_meta_dict, list_of_messages).
+    """
+    meta = {}
+    messages: list[Message] = []
+    msg_index = 0
 
     try:
         raw_text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        return messages
+        return meta, messages
 
     for line in raw_text.splitlines():
         line = line.strip()
@@ -118,39 +99,86 @@ def parse_overview(path: Path) -> list[Message]:
         except json.JSONDecodeError:
             continue
 
-        # Parse the message fields
-        step_index = obj.get("step_index", 0)
-        source = obj.get("source", "UNKNOWN")
-        msg_type = obj.get("type", "UNKNOWN")
-        status = obj.get("status", "UNKNOWN")
-        created_at = parse_timestamp(obj.get("created_at"))
-        content = obj.get("content")
+        entry_type = obj.get("type", "")
+        timestamp = parse_timestamp(obj.get("timestamp"))
+        payload = obj.get("payload", {})
 
-        # Parse tool calls if present
+        if entry_type == "session_meta":
+            meta = payload
+            continue
+
+        if entry_type == "turn_context":
+            # Extract model info from turn context
+            if "model" in payload:
+                meta["model"] = payload["model"]
+            continue
+
+        if entry_type != "response_item":
+            continue
+
+        role = payload.get("role", "")
+        msg_type = payload.get("type", "")
+
+        # Skip non-message types we don't care about
+        if msg_type not in ("message", "reasoning", "function_call", "function_call_output"):
+            continue
+
+        # Extract content
+        content = ""
         tool_calls = []
-        if "tool_calls" in obj:
-            tool_calls = parse_tool_calls(obj["tool_calls"])
 
-        # Clean content for display
-        display_content = clean_content(content) if content else None
+        if msg_type == "message":
+            content_list = payload.get("content", [])
+            if isinstance(content_list, list):
+                content = extract_message_text(content_list)
+            elif isinstance(content_list, str):
+                content = content_list
+
+        elif msg_type == "reasoning":
+            # Reasoning/thinking content
+            summary = payload.get("summary", [])
+            if isinstance(summary, list):
+                parts = []
+                for s in summary:
+                    if isinstance(s, dict):
+                        parts.append(s.get("text", ""))
+                    elif isinstance(s, str):
+                        parts.append(s)
+                content = "\n".join(parts)
+            elif isinstance(summary, str):
+                content = summary
+            if not content:
+                content = "[thinking...]"
+
+        elif msg_type == "function_call":
+            name = payload.get("name", "unknown")
+            args_str = payload.get("arguments", "{}")
+            try:
+                args = json.loads(args_str) if isinstance(args_str, str) else args_str
+            except json.JSONDecodeError:
+                args = {"raw": args_str}
+            tool_calls.append(ToolCall(name=name, args=args if isinstance(args, dict) else {"raw": str(args)}))
+            content = f"🔧 {name}"
+
+        elif msg_type == "function_call_output":
+            output = payload.get("output", "")
+            content = output[:2000] if output else "[no output]"
+
+        # Skip empty messages and developer/system context
+        if not content and not tool_calls:
+            continue
+        if role == "developer":
+            continue
 
         msg = Message(
-            step_index=step_index,
-            source=source,
-            type=msg_type,
-            status=status,
-            created_at=created_at,
-            content=display_content,
+            index=msg_index,
+            role=role or "system",
+            content=content,
+            timestamp=timestamp,
+            msg_type=msg_type,
             tool_calls=tool_calls,
         )
         messages.append(msg)
+        msg_index += 1
 
-    return messages
-
-
-def derive_title(messages: list[Message]) -> str:
-    """Derive a conversation title from the first user message."""
-    for msg in messages:
-        if msg.source == "USER_EXPLICIT" and msg.type == "USER_INPUT" and msg.content:
-            return extract_title_from_content(msg.content)
-    return "Untitled"
+    return meta, messages

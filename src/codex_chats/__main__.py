@@ -1,4 +1,4 @@
-"""CLI entry point for the Antigravity Chat History TUI."""
+"""CLI entry point for the Codex Chat History TUI."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ import click
 
 from .app import CodexChatsApp
 
-# Default Antigravity data directory
-DEFAULT_DATA_DIR = Path.home() / ".gemini" / "antigravity"
+# Default Codex data directory
+DEFAULT_DATA_DIR = Path.home() / ".codex"
 
 
 @click.command()
@@ -19,21 +19,21 @@ DEFAULT_DATA_DIR = Path.home() / ".gemini" / "antigravity"
     type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
     default=DEFAULT_DATA_DIR,
     show_default=True,
-    help="Path to the Antigravity data directory.",
+    help="Path to the Codex data directory.",
 )
 @click.version_option(package_name="codex-chats")
 def main(data_dir: Path) -> None:
-    """Browse and view your Antigravity conversation history in the terminal.
+    """Browse and view your Codex conversation history in the terminal.
 
-    Launch this TUI to see all your past Antigravity conversations,
+    Launch this TUI to see all your past Codex conversations,
     search through them, and view full chat transcripts.
     """
     # Validate the data directory
-    conversations_dir = data_dir / "conversations"
-    if not conversations_dir.is_dir():
+    history_file = data_dir / "history.jsonl"
+    if not history_file.is_file():
         click.echo(
-            f"Error: No 'conversations' directory found at {data_dir}\n"
-            f"Make sure this is a valid Antigravity data directory.",
+            f"Error: No 'history.jsonl' found at {data_dir}\n"
+            f"Make sure this is a valid Codex data directory.",
             err=True,
         )
         sys.exit(1)

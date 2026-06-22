@@ -1,4 +1,4 @@
-"""Main Textual application for the Antigravity Chat History TUI."""
+"""Main Textual application for the Codex Chat History TUI."""
 
 from __future__ import annotations
 
@@ -16,9 +16,9 @@ from .widgets.chat_viewer import ChatViewer
 
 
 class CodexChatsApp(App):
-    """A TUI app to browse and view Antigravity conversation history."""
+    """A TUI app to browse and view Codex conversation history."""
 
-    TITLE = "Antigravity Chat History"
+    TITLE = "Codex Chat History"
     SUB_TITLE = "Browse your past conversations"
 
     CSS = """
@@ -31,9 +31,9 @@ class CodexChatsApp(App):
     }
 
     #left-panel {
-        width: 36;
-        min-width: 30;
-        max-width: 50;
+        width: 40;
+        min-width: 34;
+        max-width: 55;
         border-right: solid $primary 30%;
         height: 1fr;
     }
@@ -113,7 +113,6 @@ class CodexChatsApp(App):
                     severity="information",
                 )
             except Exception:
-                # Fallback if clipboard not available
                 self.notify(
                     f"ID: {self._selected_conversation.id}",
                     title="Conversation ID",

@@ -30,19 +30,10 @@ class ConversationItem(Static):
         background: $accent 30%;
         border-left: thick $accent;
     }
-    ConversationItem .date-badge {
-        color: $text-muted;
-    }
     ConversationItem .title-text {
         color: $text;
     }
     ConversationItem .meta-text {
-        color: $text-disabled;
-    }
-    ConversationItem .has-logs {
-        color: $success;
-    }
-    ConversationItem .no-logs {
         color: $text-disabled;
     }
     """
@@ -53,23 +44,29 @@ class ConversationItem(Static):
 
     def compose(self) -> ComposeResult:
         conv = self.conversation
-        log_indicator = "●" if conv.has_logs else "○"
+        indicator = "●" if conv.has_transcript else "○"
 
         # Truncate title for display
         display_title = conv.title
         if len(display_title) > 38:
             display_title = display_title[:35] + "…"
 
-        line1 = f"{log_indicator}  {conv.date_label}  {display_title}"
-        meta_parts = [conv.size_label]
-        if conv.has_logs:
-            meta_parts.append(f"{conv.message_count} msgs")
-        if conv.artifacts:
-            meta_parts.append(f"{len(conv.artifacts)} artifacts")
-        line2 = f"   {'  •  '.join(meta_parts)}"
+        line1 = f"{indicator}  {conv.date_label}  {display_title}"
+
+        meta_parts = []
+        if conv.msg_count_from_history > 0:
+            meta_parts.append(f"{conv.msg_count_from_history} msgs")
+        if conv.model:
+            meta_parts.append(conv.model)
+        if conv.cwd:
+            # Show just the last directory component
+            cwd_short = conv.cwd.rstrip("/").rsplit("/", 1)[-1]
+            meta_parts.append(cwd_short)
+        line2 = f"   {'  •  '.join(meta_parts)}" if meta_parts else ""
 
         yield Static(line1, classes="title-text", markup=False)
-        yield Static(line2, classes="meta-text", markup=False)
+        if line2:
+            yield Static(line2, classes="meta-text", markup=False)
 
 
 class ChatList(Widget):
@@ -120,7 +117,6 @@ class ChatList(Widget):
     def on_mount(self) -> None:
         """Populate the list on mount."""
         self._rebuild_list()
-        # Select the first item if available
         if self._filtered:
             self.selected_index = 0
             self._highlight_selected()
@@ -142,6 +138,8 @@ class ChatList(Widget):
                 for c in self.all_conversations
                 if query in c.title.lower()
                 or query in c.id.lower()
+                or query in c.model.lower()
+                or query in c.cwd.lower()
                 or any(
                     query in (m.content or "").lower()
                     for m in c.messages
@@ -170,7 +168,6 @@ class ChatList(Widget):
                 item.add_class("--selected")
             else:
                 item.remove_class("--selected")
-        # Scroll the selected item into view
         if items and 0 <= self.selected_index < len(items):
             items[self.selected_index].scroll_visible()
 
@@ -194,7 +191,6 @@ class ChatList(Widget):
 
     def on_click(self, event) -> None:
         """Handle click on a conversation item."""
-        # Find which ConversationItem was clicked
         container = self.query_one("#conversation-list", Vertical)
         items = list(container.query(ConversationItem))
         for i, item in enumerate(items):

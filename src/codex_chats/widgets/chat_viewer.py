@@ -1,4 +1,4 @@
-"""Chat viewer widget — displays a conversation's full transcript in the right panel."""
+"""Chat viewer widget — displays a Codex conversation's full transcript."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ from ..models import Conversation, Message
 
 def _format_timestamp(msg: Message) -> str:
     """Format a message timestamp for display."""
-    if msg.created_at:
-        return msg.created_at.strftime("%b %d, %Y  %I:%M %p")
+    if msg.timestamp:
+        return msg.timestamp.strftime("%b %d, %Y  %I:%M %p")
     return ""
 
 
@@ -27,8 +27,8 @@ def _format_tool_calls(msg: Message) -> str:
         args_summary = []
         for k, v in tc.args.items():
             val_str = str(v)
-            if len(val_str) > 80:
-                val_str = val_str[:77] + "…"
+            if len(val_str) > 100:
+                val_str = val_str[:97] + "…"
             args_summary.append(f"    {k}: {val_str}")
         args_block = "\n".join(args_summary)
         lines.append(f"  🔧 {tc.name}\n{args_block}")
@@ -49,13 +49,17 @@ class MessageBlock(Static):
         border-left: thick $primary;
         background: $primary 8%;
     }
-    MessageBlock.model-message {
+    MessageBlock.assistant-message {
         border-left: thick $success;
         background: $success 8%;
     }
-    MessageBlock.system-message {
+    MessageBlock.thinking-message {
         border-left: thick $warning;
         background: $warning 5%;
+    }
+    MessageBlock.tool-message {
+        border-left: thick $accent;
+        background: $accent 5%;
     }
     MessageBlock .msg-header {
         color: $text;
@@ -80,13 +84,18 @@ class MessageBlock(Static):
         self._set_role_class()
 
     def _set_role_class(self) -> None:
-        """Set CSS class based on message source."""
-        if self.message.source == "USER_EXPLICIT":
+        """Set CSS class based on message role and type."""
+        msg = self.message
+        if msg.msg_type == "reasoning":
+            self.add_class("thinking-message")
+        elif msg.msg_type in ("function_call", "function_call_output"):
+            self.add_class("tool-message")
+        elif msg.role == "user":
             self.add_class("user-message")
-        elif self.message.source == "MODEL":
-            self.add_class("model-message")
+        elif msg.role == "assistant":
+            self.add_class("assistant-message")
         else:
-            self.add_class("system-message")
+            self.add_class("tool-message")
 
     def compose(self) -> ComposeResult:
         msg = self.message
@@ -102,7 +111,6 @@ class MessageBlock(Static):
             yield Static(f"   {ts}", classes="msg-timestamp", markup=False)
 
         if msg.content:
-            # Truncate very long content for display performance
             content = msg.content
             if len(content) > 3000:
                 content = content[:3000] + "\n\n...content truncated for display..."
@@ -114,7 +122,7 @@ class MessageBlock(Static):
 
 
 class EmptyState(Static):
-    """Shown when no conversation is selected or conversation has no logs."""
+    """Shown when no conversation is selected or has no transcript."""
 
     DEFAULT_CSS = """
     EmptyState {
@@ -160,13 +168,14 @@ class ConversationHeader(Static):
         yield Static(f"ID: {conv.id}", classes="conv-id", markup=False)
 
         meta_parts = [
-            f"Last modified: {conv.last_modified.strftime('%b %d, %Y %I:%M %p')}",
-            f"Size: {conv.size_label}",
+            f"Last active: {conv.last_modified.strftime('%b %d, %Y %I:%M %p')}",
         ]
-        if conv.has_logs:
+        if conv.model:
+            meta_parts.append(f"Model: {conv.model}")
+        if conv.cwd:
+            meta_parts.append(f"Dir: {conv.cwd}")
+        if conv.message_count > 0:
             meta_parts.append(f"Messages: {conv.message_count}")
-        if conv.artifacts:
-            meta_parts.append(f"Artifacts: {', '.join(conv.artifacts)}")
 
         yield Static("  •  ".join(meta_parts), classes="conv-meta", markup=False)
 
@@ -198,12 +207,12 @@ class ChatViewer(Widget):
         # Mount the header
         scroll.mount(ConversationHeader(conversation))
 
-        if not conversation.has_logs:
+        if not conversation.has_transcript:
             scroll.mount(
                 EmptyState(
-                    f"No conversation logs available for this chat.\n\n"
-                    f"The .pb file exists ({conversation.size_label}) but its content\n"
-                    f"is encrypted and cannot be displayed.\n\n"
+                    f"No session transcript file found for this chat.\n\n"
+                    f"The session was recorded in history.jsonl\n"
+                    f"but no rollout file exists under sessions/.\n\n"
                     f"ID: {conversation.id}"
                 )
             )
@@ -213,7 +222,7 @@ class ChatViewer(Widget):
             scroll.mount(EmptyState("This conversation has no messages."))
             return
 
-        # Mount message blocks — skip empty system messages for cleaner view
+        # Mount message blocks
         for msg in conversation.messages:
             if msg.content or msg.tool_calls:
                 scroll.mount(MessageBlock(msg))

@@ -1,4 +1,4 @@
-"""Data models for Antigravity conversations and messages."""
+"""Data models for Codex conversations and messages."""
 
 from __future__ import annotations
 
@@ -19,57 +19,54 @@ class ToolCall:
 class Message:
     """A single message within a conversation."""
 
-    step_index: int
-    source: str  # "USER_EXPLICIT", "MODEL", "USER_IMPLICIT" etc.
-    type: str  # "USER_INPUT", "PLANNER_RESPONSE", "VIEW_FILE" etc.
-    status: str
-    created_at: Optional[datetime] = None
-    content: Optional[str] = None
+    index: int
+    role: str  # "user", "assistant", "developer", "system"
+    content: str = ""
+    timestamp: Optional[datetime] = None
+    msg_type: str = ""  # "message", "reasoning", "function_call", etc.
     tool_calls: list[ToolCall] = field(default_factory=list)
 
     @property
     def role_icon(self) -> str:
-        """Return an icon representing the message source."""
-        if self.source == "USER_EXPLICIT":
-            return "👤"
-        elif self.source == "MODEL":
-            return "🤖"
-        else:
-            return "⚙️"
+        """Return an icon representing the message role."""
+        icons = {
+            "user": "👤",
+            "assistant": "🤖",
+            "developer": "⚙️",
+            "system": "⚙️",
+        }
+        return icons.get(self.role, "❓")
 
     @property
     def role_label(self) -> str:
-        """Return a human-readable label for the message source."""
-        if self.source == "USER_EXPLICIT":
-            return "USER"
-        elif self.source == "MODEL":
-            return "MODEL"
-        else:
-            return "SYSTEM"
+        """Return a human-readable label for the message role."""
+        return self.role.upper()
 
     @property
     def display_type(self) -> str:
         """Return a human-readable message type."""
         type_map = {
-            "USER_INPUT": "Message",
-            "PLANNER_RESPONSE": "Response",
-            "VIEW_FILE": "View File",
-            "TOOL_CALL": "Tool Call",
+            "message": "Message",
+            "reasoning": "Thinking",
+            "function_call": "Tool Call",
+            "function_call_output": "Tool Output",
         }
-        return type_map.get(self.type, self.type.replace("_", " ").title())
+        return type_map.get(self.msg_type, self.msg_type.replace("_", " ").title())
 
 
 @dataclass
 class Conversation:
-    """A single Antigravity conversation with its metadata and messages."""
+    """A single Codex conversation with its metadata and messages."""
 
     id: str
     title: str
     last_modified: datetime
     messages: list[Message] = field(default_factory=list)
-    has_logs: bool = False
-    artifacts: list[str] = field(default_factory=list)
-    size_bytes: int = 0
+    has_transcript: bool = False
+    session_file: str = ""
+    model: str = ""
+    cwd: str = ""
+    msg_count_from_history: int = 0
 
     @property
     def date_label(self) -> str:
@@ -78,20 +75,9 @@ class Conversation:
 
     @property
     def message_count(self) -> int:
-        """Return the number of user/model messages (excluding system)."""
+        """Return the number of user/assistant messages with content."""
         return sum(
             1
             for m in self.messages
-            if m.source in ("USER_EXPLICIT", "MODEL")
-            and m.content  # Only count messages with actual content
+            if m.role in ("user", "assistant") and m.content
         )
-
-    @property
-    def size_label(self) -> str:
-        """Return a human-readable size label."""
-        if self.size_bytes < 1024:
-            return f"{self.size_bytes} B"
-        elif self.size_bytes < 1024 * 1024:
-            return f"{self.size_bytes / 1024:.0f} KB"
-        else:
-            return f"{self.size_bytes / (1024 * 1024):.1f} MB"
