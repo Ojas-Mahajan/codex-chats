@@ -56,7 +56,7 @@ class CodexChatsApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit", show=True, priority=True),
         Binding("slash", "focus_search", "Search", show=True),
-        Binding("escape", "unfocus_search", "Back", show=False),
+        Binding("escape", "focus_list", "Back to List", show=True),
         Binding("c", "copy_id", "Copy ID", show=True),
         Binding("enter,o", "open_session", "Open in Codex", show=True),
     ]
@@ -111,8 +111,8 @@ class CodexChatsApp(App):
         except Exception:
             pass
 
-    def action_unfocus_search(self) -> None:
-        """Unfocus the search input and return focus to the list."""
+    def action_focus_list(self) -> None:
+        """Return focus to the conversation list."""
         try:
             chat_list = self.query_one("#left-panel", ChatList)
             chat_list.focus()
