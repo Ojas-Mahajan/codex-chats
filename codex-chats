@@ -1,0 +1,22 @@
+#!/bin/bash
+# codex-chats — Browse Codex conversation history from your terminal
+# Usage: codex-chats [--data-dir PATH] [--help]
+
+# Resolve symlinks to find the real script location
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+    DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+
+VENV_DIR="$SCRIPT_DIR/.venv"
+
+if [ ! -d "$VENV_DIR" ]; then
+    echo "Error: Virtual environment not found at $VENV_DIR"
+    echo "Run: cd $SCRIPT_DIR && python3 -m venv .venv && source .venv/bin/activate && pip install -e ."
+    exit 1
+fi
+
+exec "$VENV_DIR/bin/codex-chats" "$@"

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codex-chats"
+version = "0.1.0"
+description = "TUI app to browse and view Antigravity conversation history"
+requires-python = ">=3.10"
+dependencies = [
+    "textual>=0.79.0",
+    "rich>=13.0",
+    "click>=8.0",
+]
+
+[project.scripts]
+codex-chats = "codex_chats.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
