@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widget import Widget
-from textual.widgets import Static
+from textual.widgets import Button, Static
 
 from ..models import Conversation, Message
 
@@ -145,6 +145,9 @@ class ConversationHeader(Static):
         background: $surface-lighten-1;
         border-bottom: solid $primary 50%;
     }
+    ConversationHeader #header-content {
+        width: 1fr;
+    }
     ConversationHeader .conv-title {
         text-style: bold;
         color: $text;
@@ -156,6 +159,10 @@ class ConversationHeader(Static):
         color: $text-disabled;
         margin-top: 0;
     }
+    ConversationHeader Button {
+        margin-top: 1;
+        margin-left: 2;
+    }
     """
 
     def __init__(self, conversation: Conversation, **kwargs) -> None:
@@ -164,9 +171,7 @@ class ConversationHeader(Static):
 
     def compose(self) -> ComposeResult:
         conv = self.conversation
-        yield Static(f"📋  {conv.title}", classes="conv-title", markup=False)
-        yield Static(f"ID: {conv.id}", classes="conv-id", markup=False)
-
+        
         meta_parts = [
             f"Last active: {conv.last_modified.strftime('%b %d, %Y %I:%M %p')}",
         ]
@@ -177,7 +182,17 @@ class ConversationHeader(Static):
         if conv.message_count > 0:
             meta_parts.append(f"Messages: {conv.message_count}")
 
-        yield Static("  •  ".join(meta_parts), classes="conv-meta", markup=False)
+        with Horizontal():
+            with Vertical(id="header-content"):
+                yield Static(f"📋  {conv.title}", classes="conv-title", markup=False)
+                yield Static(f"ID: {conv.id}", classes="conv-id", markup=False)
+                yield Static("  •  ".join(meta_parts), classes="conv-meta", markup=False)
+            
+            yield Button("🚀 Open in Codex", id="open-codex-btn", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "open-codex-btn":
+            self.app.action_open_session()
 
 
 class ChatViewer(Widget):
