@@ -96,8 +96,12 @@ class CodexChatsApp(App):
         """Open the selected conversation in Codex."""
         if self._selected_conversation:
             import subprocess
+            from pathlib import Path
             with self.suspend():
-                subprocess.run(["codex", "resume", self._selected_conversation.id])
+                cwd = self._selected_conversation.cwd or None
+                if cwd and not Path(cwd).is_dir():
+                    cwd = None
+                subprocess.run(["codex", "resume", self._selected_conversation.id], cwd=cwd)
 
     def action_focus_search(self) -> None:
         """Focus the search input."""
