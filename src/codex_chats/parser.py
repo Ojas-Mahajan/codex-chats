@@ -162,7 +162,20 @@ def parse_session_file(path: Path) -> tuple[dict, list[Message]]:
 
         elif msg_type == "function_call_output":
             output = payload.get("output", "")
-            content = output[:2000] if output else "[no output]"
+            if isinstance(output, list):
+                parts = []
+                for item in output:
+                    if isinstance(item, dict):
+                        if item.get("type") == "input_image":
+                            parts.append("[Image Output]")
+                        else:
+                            parts.append(str(item))
+                    else:
+                        parts.append(str(item))
+                output_str = "\n".join(parts)
+            else:
+                output_str = str(output)
+            content = output_str[:2000] if output_str else "[no output]"
 
         # Skip empty messages and developer/system context
         if not content and not tool_calls:
