@@ -91,6 +91,7 @@ class ChatList(Widget):
     BINDINGS = [
         Binding("up,k", "cursor_up", "Up", show=False),
         Binding("down,j", "cursor_down", "Down", show=False),
+        Binding("enter,o", "open_session", "Open Session", show=False),
     ]
 
     selected_index: reactive[int] = reactive(0, init=False)
@@ -98,6 +99,13 @@ class ChatList(Widget):
 
     class ConversationSelected(TextualMessage):
         """Posted when a conversation is selected."""
+
+        def __init__(self, conversation: Conversation) -> None:
+            super().__init__()
+            self.conversation = conversation
+
+    class OpenSession(TextualMessage):
+        """Posted when a conversation should be opened."""
 
         def __init__(self, conversation: Conversation) -> None:
             super().__init__()
@@ -189,15 +197,25 @@ class ChatList(Widget):
                 self.ConversationSelected(self._filtered[self.selected_index])
             )
 
+    def action_open_session(self) -> None:
+        """Open the currently selected session."""
+        if self._filtered and 0 <= self.selected_index < len(self._filtered):
+            self.post_message(
+                self.OpenSession(self._filtered[self.selected_index])
+            )
+
     def on_click(self, event) -> None:
         """Handle click on a conversation item."""
         container = self.query_one("#conversation-list", Vertical)
         items = list(container.query(ConversationItem))
         for i, item in enumerate(items):
             if item is event.widget or item in event.widget.ancestors_with_self:
-                self.selected_index = i
-                self._highlight_selected()
-                self.post_message(
-                    self.ConversationSelected(self._filtered[i])
-                )
+                if self.selected_index == i:
+                    self.post_message(self.OpenSession(self._filtered[i]))
+                else:
+                    self.selected_index = i
+                    self._highlight_selected()
+                    self.post_message(
+                        self.ConversationSelected(self._filtered[i])
+                    )
                 break

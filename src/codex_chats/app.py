@@ -58,6 +58,7 @@ class CodexChatsApp(App):
         Binding("slash", "focus_search", "Search", show=True),
         Binding("escape", "unfocus_search", "Back", show=False),
         Binding("c", "copy_id", "Copy ID", show=True),
+        Binding("enter,o", "open_session", "Open in Codex", show=True),
     ]
 
     def __init__(self, data_dir: str | Path, **kwargs) -> None:
@@ -85,6 +86,18 @@ class CodexChatsApp(App):
         self._selected_conversation = event.conversation
         viewer = self.query_one("#right-panel", ChatViewer)
         viewer.show_conversation(event.conversation)
+
+    def on_chat_list_open_session(self, event: ChatList.OpenSession) -> None:
+        """Handle opening a session in Codex."""
+        self._selected_conversation = event.conversation
+        self.action_open_session()
+
+    def action_open_session(self) -> None:
+        """Open the selected conversation in Codex."""
+        if self._selected_conversation:
+            import subprocess
+            with self.suspend():
+                subprocess.run(["codex", "resume", self._selected_conversation.id])
 
     def action_focus_search(self) -> None:
         """Focus the search input."""
