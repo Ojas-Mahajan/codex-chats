@@ -199,6 +199,8 @@ class ChatViewer(Widget):
     }
     ChatViewer #viewer-scroll {
         height: 1fr;
+        overflow-y: auto;
+        scrollbar-size: 0 0;
     }
     """
 
