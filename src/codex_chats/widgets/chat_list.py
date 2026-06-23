@@ -14,6 +14,7 @@ from textual.widget import Widget
 from textual.widgets import Input, Static
 
 from ..models import Conversation
+from .directory_list import DirectoryFilter, normalize_directory
 
 
 class ConversationItem(Static):
@@ -23,15 +24,15 @@ class ConversationItem(Static):
     ConversationItem {
         height: 3;
         padding: 0 1;
-        border-bottom: solid $surface-lighten-2;
+        border-bottom: solid #333333;
         content-align-vertical: middle;
     }
     ConversationItem:hover {
         background: $surface-lighten-1;
     }
     ConversationItem.--selected {
-        background: $accent 30%;
-        border-left: thick $accent;
+        background: $surface-lighten-1;
+        border-left: thick #555555;
     }
     ConversationItem .title-text {
         color: $text;
@@ -80,10 +81,10 @@ class DateSeparator(Static):
         height: 3;
         padding: 0 1;
         content-align: left middle;
-        background: $primary 20%;
-        color: $text;
+        background: $surface-lighten-1;
+        color: $text-muted;
         text-style: bold;
-        border-left: thick $accent;
+        border-left: solid #333333;
     }
     """
 
@@ -118,22 +119,24 @@ class ChatList(Widget):
         height: 1fr;
     }
     ChatList:focus {
-        border: solid $accent;
+        border: solid #555555;
     }
     ChatList #search-input {
         dock: top;
         margin: 0 0 0 0;
-        border: solid $primary;
+        border: solid #333333;
     }
     ChatList #conversation-list {
         height: 1fr;
         overflow-y: auto;
+        scrollbar-size: 0 0;
     }
     """
 
     BINDINGS = [
         Binding("up,k", "cursor_up", "Up", show=False),
         Binding("down,j", "cursor_down", "Down", show=False),
+        Binding("left,h", "focus_directory", "Focus Directories", show=False),
         Binding("right,l", "focus_right", "Focus Right", show=False),
         Binding("enter,o", "open_session", "Open Session", show=False),
     ]
@@ -162,6 +165,7 @@ class ChatList(Widget):
         self.all_conversations = conversations
         self._filtered: list[Conversation] = list(conversations)
         self._search_index = self._build_search_index(conversations)
+        self.directory_filter: DirectoryFilter = None
 
     def _build_search_index(
         self, conversations: list[Conversation]
@@ -207,12 +211,18 @@ class ChatList(Widget):
     ) -> None:
         """Filter conversations based on the search query."""
         query = self.search_query
+        conversations = [
+            c
+            for c in self.all_conversations
+            if self.directory_filter is None
+            or normalize_directory(c.cwd) == self.directory_filter
+        ]
         if not query:
-            self._filtered = list(self.all_conversations)
+            self._filtered = list(conversations)
         else:
             self._filtered = [
                 c
-                for c in self.all_conversations
+                for c in conversations
                 if query in self._search_index.get(c.id, "")
             ]
         self.selected_index = self._resolve_selected_index(
@@ -290,6 +300,10 @@ class ChatList(Widget):
                 self.ConversationSelected(self._filtered[self.selected_index])
             )
 
+    def action_focus_directory(self) -> None:
+        """Move focus to the directory sidebar."""
+        self.app.action_focus_directory_panel()
+
     def action_focus_right(self) -> None:
         """Move focus to the right panel."""
         self.app.action_focus_right_panel()
@@ -334,4 +348,15 @@ class ChatList(Widget):
         """Replace the backing data and refresh the visible list."""
         self.all_conversations = list(conversations)
         self._search_index = self._build_search_index(self.all_conversations)
+        self._apply_filter(preferred_id=preferred_id, fallback_index=fallback_index)
+
+    def set_directory_filter(
+        self,
+        directory: DirectoryFilter,
+        *,
+        preferred_id: str | None = None,
+        fallback_index: int = 0,
+    ) -> None:
+        """Set the active directory filter and refresh visible conversations."""
+        self.directory_filter = directory
         self._apply_filter(preferred_id=preferred_id, fallback_index=fallback_index)

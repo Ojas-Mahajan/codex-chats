@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.widget import Widget
-from textual.widgets import Button, Static
+from textual.widgets import Static
 
 from ..models import Conversation, Message
 
@@ -42,25 +42,25 @@ class MessageBlock(Static):
 
     DEFAULT_CSS = """
     MessageBlock {
-        margin: 0 0 1 0;
-        padding: 1 2;
+        margin: 0;
+        padding: 0 1;
         border-left: thick transparent;
     }
     MessageBlock.user-message {
-        border-left: thick $primary;
-        background: $primary 8%;
+        border-left: thick #555555;
+        background: $surface-lighten-1;
     }
     MessageBlock.assistant-message {
-        border-left: thick $success;
-        background: $success 8%;
+        border-left: thick #444444;
+        background: $surface;
     }
     MessageBlock.thinking-message {
-        border-left: thick $warning;
-        background: $warning 5%;
+        border-left: thick #333333;
+        background: $surface;
     }
     MessageBlock.tool-message {
-        border-left: thick $accent;
-        background: $accent 5%;
+        border-left: thick #333333;
+        background: $surface;
     }
     MessageBlock .msg-header {
         color: $text;
@@ -71,11 +71,11 @@ class MessageBlock(Static):
     }
     MessageBlock .msg-content {
         color: $text;
-        margin-top: 1;
+        margin-top: 0;
     }
     MessageBlock .msg-tools {
         color: $accent;
-        margin-top: 1;
+        margin-top: 0;
     }
     """
 
@@ -136,36 +136,15 @@ class EmptyState(Static):
     """
 
 
-class HeaderActionButton(Button):
-    """Header button with pane-aware keyboard movement."""
-
-    BINDINGS = [
-        Binding("left,h", "focus_previous", "Previous", show=False),
-        Binding("right,l", "focus_next", "Next", show=False),
-    ]
-
-    def action_focus_previous(self) -> None:
-        """Move focus to the previous logical target."""
-        if self.id == "delete-session-btn":
-            self.app.action_focus_open_button()
-        else:
-            self.app.action_focus_list()
-
-    def action_focus_next(self) -> None:
-        """Move focus to the next logical target."""
-        if self.id == "open-codex-btn":
-            self.app.action_focus_delete_button()
-
-
 class ConversationHeader(Static):
     """Header showing conversation title, ID, and metadata."""
 
     DEFAULT_CSS = """
     ConversationHeader {
         height: auto;
-        padding: 1 2;
+        padding: 0 1;
         background: $surface-lighten-1;
-        border-bottom: solid $primary 50%;
+        border-bottom: solid #333333;
     }
     ConversationHeader #header-content {
         width: 1fr;
@@ -180,17 +159,6 @@ class ConversationHeader(Static):
     ConversationHeader .conv-meta {
         color: $text-disabled;
         margin-top: 0;
-    }
-    ConversationHeader #header-actions {
-        width: 24;
-        margin-left: 2;
-    }
-    ConversationHeader #header-actions Button {
-        width: 100%;
-        margin-top: 1;
-    }
-    ConversationHeader #header-actions Button:focus {
-        text-style: bold reverse;
     }
     """
 
@@ -211,37 +179,20 @@ class ConversationHeader(Static):
         if conv.message_count > 0:
             meta_parts.append(f"Messages: {conv.message_count}")
 
-        with Horizontal():
-            with Vertical(id="header-content"):
-                yield Static(f"📋  {conv.title}", classes="conv-title", markup=False)
-                yield Static(f"ID: {conv.id}", classes="conv-id", markup=False)
-                yield Static(
-                    "  •  ".join(meta_parts),
-                    classes="conv-meta",
-                    markup=False,
-                )
-
-            with Vertical(id="header-actions"):
-                yield HeaderActionButton(
-                    "🚀 Open in Codex",
-                    id="open-codex-btn",
-                    variant="primary",
-                )
-                yield HeaderActionButton(
-                    "Delete",
-                    id="delete-session-btn",
-                    variant="error",
-                )
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "open-codex-btn":
-            self.app.action_open_session()
-        elif event.button.id == "delete-session-btn":
-            self.app.action_delete_session()
+        with Vertical(id="header-content"):
+            yield Static(f"📋  {conv.title}", classes="conv-title", markup=False)
+            yield Static(f"ID: {conv.id}", classes="conv-id", markup=False)
+            yield Static(
+                "  •  ".join(meta_parts),
+                classes="conv-meta",
+                markup=False,
+            )
 
 
 class ChatViewer(Widget):
     """Right panel: displays the selected conversation's transcript."""
+
+    can_focus = True
 
     BINDINGS = [
         Binding("left,h", "focus_left", "Focus Left", show=False),
@@ -252,12 +203,19 @@ class ChatViewer(Widget):
         width: 1fr;
         height: 1fr;
     }
+    ChatViewer:focus {
+        border: solid #555555;
+    }
+    ChatViewer #viewer-header {
+        height: auto;
+    }
     ChatViewer #viewer-scroll {
         height: 1fr;
     }
     """
 
     def compose(self) -> ComposeResult:
+        yield Vertical(id="viewer-header")
         yield VerticalScroll(
             EmptyState("Select a conversation to view its history"),
             id="viewer-scroll",
@@ -269,11 +227,13 @@ class ChatViewer(Widget):
 
     def show_conversation(self, conversation: Conversation) -> None:
         """Display a conversation's full transcript."""
+        header = self.query_one("#viewer-header", Vertical)
         scroll = self.query_one("#viewer-scroll", VerticalScroll)
+        header.remove_children()
         scroll.remove_children()
 
         # Mount the header
-        scroll.mount(ConversationHeader(conversation))
+        header.mount(ConversationHeader(conversation))
 
         if not conversation.has_transcript:
             scroll.mount(
@@ -300,6 +260,8 @@ class ChatViewer(Widget):
 
     def show_empty(self) -> None:
         """Show the empty state."""
+        header = self.query_one("#viewer-header", Vertical)
         scroll = self.query_one("#viewer-scroll", VerticalScroll)
+        header.remove_children()
         scroll.remove_children()
         scroll.mount(EmptyState("Select a conversation to view its history"))

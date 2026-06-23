@@ -7,13 +7,14 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
-from textual.widgets import Button, Footer, Header
+from textual.widgets import Footer
 
 from .models import Conversation
 from .scanner import delete_session_data, scan_conversations
 from .widgets.chat_list import ChatList
 from .widgets.chat_viewer import ChatViewer
 from .widgets.confirm_delete import ConfirmDeleteDialog
+from .widgets.directory_list import DirectoryList
 
 
 class CodexChatsApp(App):
@@ -32,21 +33,16 @@ class CodexChatsApp(App):
     }
 
     #left-panel {
-        width: 40;
-        min-width: 34;
+        width: 38;
+        min-width: 30;
         max-width: 55;
-        border-right: solid $primary 30%;
+        border-right: solid #333333;
         height: 1fr;
     }
 
     #right-panel {
         width: 1fr;
         height: 1fr;
-    }
-
-    Header {
-        background: $primary;
-        color: $text;
     }
 
     Footer {
@@ -70,12 +66,11 @@ class CodexChatsApp(App):
         self._selected_conversation: Conversation | None = None
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
-
         # Scan conversations
         self.conversations = scan_conversations(self.data_dir)
 
         with Horizontal(id="main-layout"):
+            yield DirectoryList(self.conversations, id="directory-panel")
             yield ChatList(self.conversations, id="left-panel")
             yield ChatViewer(id="right-panel")
 
@@ -100,6 +95,13 @@ class CodexChatsApp(App):
         """Handle opening a session in Codex."""
         self._selected_conversation = event.conversation
         self.action_open_session()
+
+    def on_directory_list_directory_selected(
+        self, event: DirectoryList.DirectorySelected
+    ) -> None:
+        """Filter the conversation list by directory."""
+        chat_list = self.query_one("#left-panel", ChatList)
+        chat_list.set_directory_filter(event.directory)
 
     def action_open_session(self) -> None:
         """Open the selected conversation in Codex."""
@@ -132,25 +134,19 @@ class CodexChatsApp(App):
         except Exception:
             pass
 
-    def action_focus_right_panel(self) -> None:
-        """Focus the Open in Codex button."""
-        self.action_focus_open_button()
-
-    def action_focus_open_button(self) -> None:
-        """Focus the Open in Codex button."""
+    def action_focus_directory_panel(self) -> None:
+        """Focus the directory sidebar."""
         try:
-            viewer = self.query_one("#right-panel", ChatViewer)
-            btn = viewer.query_one("#open-codex-btn", Button)
-            btn.focus()
+            directory_list = self.query_one("#directory-panel", DirectoryList)
+            directory_list.focus()
         except Exception:
             pass
 
-    def action_focus_delete_button(self) -> None:
-        """Focus the Delete button."""
+    def action_focus_right_panel(self) -> None:
+        """Focus the transcript viewer."""
         try:
             viewer = self.query_one("#right-panel", ChatViewer)
-            btn = viewer.query_one("#delete-session-btn", Button)
-            btn.focus()
+            viewer.focus()
         except Exception:
             pass
 
@@ -199,8 +195,16 @@ class CodexChatsApp(App):
                     return
 
                 self.conversations = scan_conversations(self.data_dir)
+                directory_list = self.query_one("#directory-panel", DirectoryList)
+                active_directory = directory_list.replace_conversations(
+                    self.conversations
+                )
                 chat_list.replace_conversations(
                     self.conversations,
+                    fallback_index=fallback_index,
+                )
+                chat_list.set_directory_filter(
+                    active_directory,
                     fallback_index=fallback_index,
                 )
 
