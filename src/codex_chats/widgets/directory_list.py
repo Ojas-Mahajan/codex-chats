@@ -91,10 +91,6 @@ class DirectoryList(Widget):
         min-width: 24;
         max-width: 40;
         height: 1fr;
-        border-right: solid #333333;
-    }
-    DirectoryList:focus {
-        border: solid #555555;
     }
     DirectoryList #directory-list {
         height: 1fr;

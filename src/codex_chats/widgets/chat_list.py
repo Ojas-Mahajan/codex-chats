@@ -118,9 +118,6 @@ class ChatList(Widget):
         width: 1fr;
         height: 1fr;
     }
-    ChatList:focus {
-        border: solid #555555;
-    }
     ChatList #search-input {
         dock: top;
         margin: 0 0 0 0;

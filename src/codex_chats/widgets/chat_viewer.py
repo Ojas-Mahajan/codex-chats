@@ -191,9 +191,6 @@ class ChatViewer(Widget):
         width: 1fr;
         height: 1fr;
     }
-    ChatViewer:focus {
-        border: solid #555555;
-    }
     ChatViewer #viewer-header {
         height: 4;
     }

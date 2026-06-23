@@ -28,6 +28,11 @@ class CodexChatsApp(App):
         background: $surface;
     }
 
+    * {
+        scrollbar-size-horizontal: 0;
+        scrollbar-size-vertical: 0;
+    }
+
     #main-layout {
         height: 1fr;
     }
@@ -36,7 +41,6 @@ class CodexChatsApp(App):
         width: 38;
         min-width: 30;
         max-width: 55;
-        border-right: solid #333333;
         height: 1fr;
     }
 
