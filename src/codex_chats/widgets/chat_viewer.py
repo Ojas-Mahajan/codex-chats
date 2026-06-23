@@ -1,8 +1,9 @@
-"""Chat viewer widget — displays a Codex conversation's full transcript."""
+"""Chat viewer widget - displays a Codex conversation's full transcript."""
 
 from __future__ import annotations
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Button, Static
@@ -135,6 +136,27 @@ class EmptyState(Static):
     """
 
 
+class HeaderActionButton(Button):
+    """Header button with pane-aware keyboard movement."""
+
+    BINDINGS = [
+        Binding("left,h", "focus_previous", "Previous", show=False),
+        Binding("right,l", "focus_next", "Next", show=False),
+    ]
+
+    def action_focus_previous(self) -> None:
+        """Move focus to the previous logical target."""
+        if self.id == "delete-session-btn":
+            self.app.action_focus_open_button()
+        else:
+            self.app.action_focus_list()
+
+    def action_focus_next(self) -> None:
+        """Move focus to the next logical target."""
+        if self.id == "open-codex-btn":
+            self.app.action_focus_delete_button()
+
+
 class ConversationHeader(Static):
     """Header showing conversation title, ID, and metadata."""
 
@@ -159,9 +181,13 @@ class ConversationHeader(Static):
         color: $text-disabled;
         margin-top: 0;
     }
-    ConversationHeader Button {
-        margin-top: 1;
+    ConversationHeader #header-actions {
+        width: 24;
         margin-left: 2;
+    }
+    ConversationHeader #header-actions Button {
+        width: 100%;
+        margin-top: 1;
     }
     """
 
@@ -171,7 +197,7 @@ class ConversationHeader(Static):
 
     def compose(self) -> ComposeResult:
         conv = self.conversation
-        
+
         meta_parts = [
             f"Last active: {conv.last_modified.strftime('%b %d, %Y %I:%M %p')}",
         ]
@@ -186,13 +212,29 @@ class ConversationHeader(Static):
             with Vertical(id="header-content"):
                 yield Static(f"📋  {conv.title}", classes="conv-title", markup=False)
                 yield Static(f"ID: {conv.id}", classes="conv-id", markup=False)
-                yield Static("  •  ".join(meta_parts), classes="conv-meta", markup=False)
-            
-            yield Button("🚀 Open in Codex", id="open-codex-btn", variant="primary")
+                yield Static(
+                    "  •  ".join(meta_parts),
+                    classes="conv-meta",
+                    markup=False,
+                )
+
+            with Vertical(id="header-actions"):
+                yield HeaderActionButton(
+                    "🚀 Open in Codex",
+                    id="open-codex-btn",
+                    variant="primary",
+                )
+                yield HeaderActionButton(
+                    "Delete",
+                    id="delete-session-btn",
+                    variant="error",
+                )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "open-codex-btn":
             self.app.action_open_session()
+        elif event.button.id == "delete-session-btn":
+            self.app.action_delete_session()
 
 
 class ChatViewer(Widget):

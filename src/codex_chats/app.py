@@ -7,7 +7,7 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
-from textual.widgets import Footer, Header
+from textual.widgets import Button, Footer, Header
 
 from .models import Conversation
 from .scanner import delete_session_data, scan_conversations
@@ -81,6 +81,10 @@ class CodexChatsApp(App):
 
         yield Footer()
 
+    def on_mount(self) -> None:
+        """Start with keyboard focus on the conversation list."""
+        self.action_focus_list()
+
     def on_chat_list_conversation_selected(
         self, event: ChatList.ConversationSelected
     ) -> None:
@@ -102,11 +106,15 @@ class CodexChatsApp(App):
         if self._selected_conversation:
             import subprocess
             from pathlib import Path
+
             with self.suspend():
                 cwd = self._selected_conversation.cwd or None
                 if cwd and not Path(cwd).is_dir():
                     cwd = None
-                subprocess.run(["codex", "resume", self._selected_conversation.id], cwd=cwd)
+                subprocess.run(
+                    ["codex", "resume", self._selected_conversation.id],
+                    cwd=cwd,
+                )
 
     def action_focus_search(self) -> None:
         """Focus the search input."""
@@ -126,10 +134,22 @@ class CodexChatsApp(App):
 
     def action_focus_right_panel(self) -> None:
         """Focus the Open in Codex button."""
+        self.action_focus_open_button()
+
+    def action_focus_open_button(self) -> None:
+        """Focus the Open in Codex button."""
         try:
-            from textual.widgets import Button
             viewer = self.query_one("#right-panel", ChatViewer)
             btn = viewer.query_one("#open-codex-btn", Button)
+            btn.focus()
+        except Exception:
+            pass
+
+    def action_focus_delete_button(self) -> None:
+        """Focus the Delete button."""
+        try:
+            viewer = self.query_one("#right-panel", ChatViewer)
+            btn = viewer.query_one("#delete-session-btn", Button)
             btn.focus()
         except Exception:
             pass
@@ -156,21 +176,44 @@ class CodexChatsApp(App):
         if not self._selected_conversation:
             return
 
+        target = self._selected_conversation
+
         def check_delete(delete: bool) -> None:
-            if delete and self._selected_conversation:
-                # Delete the data
-                delete_session_data(
-                    self.data_dir,
-                    self._selected_conversation.id,
-                    self._selected_conversation.session_file,
-                )
-                
-                # Remove from ChatList and re-select
+            if delete:
                 chat_list = self.query_one("#left-panel", ChatList)
-                chat_list.remove_conversation(self._selected_conversation.id)
-                self.notify("Session deleted.", severity="information")
+                fallback_index = chat_list.selected_index
+
+                try:
+                    result = delete_session_data(
+                        self.data_dir,
+                        target.id,
+                        target.session_file,
+                    )
+                except OSError as exc:
+                    self.notify(
+                        str(exc),
+                        title="Delete failed",
+                        severity="error",
+                    )
+                    self.action_focus_list()
+                    return
+
+                self.conversations = scan_conversations(self.data_dir)
+                chat_list.replace_conversations(
+                    self.conversations,
+                    fallback_index=fallback_index,
+                )
+
+                details = []
+                if result.deleted_rollout_file:
+                    details.append("rollout file")
+                if result.removed_history_rows:
+                    details.append(f"{result.removed_history_rows} history row(s)")
+                suffix = f" Removed {', '.join(details)}." if details else ""
+                self.notify(f"Session deleted.{suffix}", severity="information")
+                self.action_focus_list()
 
         self.push_screen(
-            ConfirmDeleteDialog(self._selected_conversation.title), 
-            check_delete
+            ConfirmDeleteDialog(target.title),
+            check_delete,
         )

@@ -4,11 +4,20 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .models import Conversation
 from .parser import extract_title, parse_session_file
+
+
+@dataclass(frozen=True)
+class DeleteSessionResult:
+    """Details about a deleted session."""
+
+    deleted_rollout_file: bool
+    removed_history_rows: int
 
 
 def _parse_history(history_path: Path) -> dict[str, dict]:
@@ -131,41 +140,69 @@ def scan_conversations(base_dir: str | Path) -> list[Conversation]:
     return results
 
 
-def delete_session_data(base_dir: str | Path, sid: str, session_file: str) -> None:
-    """Delete a session's rollout file and remove it from history.jsonl."""
+def _prune_empty_session_dirs(path: Path, sessions_root: Path) -> None:
+    """Remove empty session directories up to, but not including, sessions_root."""
+    try:
+        sessions_root = sessions_root.resolve()
+    except OSError:
+        return
+
+    current = path
+    while current != sessions_root and sessions_root in current.parents:
+        try:
+            current.rmdir()
+        except OSError:
+            return
+        current = current.parent
+
+
+def delete_session_data(
+    base_dir: str | Path, sid: str, session_file: str
+) -> DeleteSessionResult:
+    """Delete a session's rollout file and remove it from history.jsonl.
+
+    Raises:
+        OSError: If a filesystem operation fails.
+    """
     base = Path(base_dir)
-    
+    deleted_rollout_file = False
+    removed_history_rows = 0
+
     # 1. Delete rollout file
     if session_file:
         sf = Path(session_file)
         if sf.is_file():
-            try:
-                sf.unlink()
-            except OSError:
-                pass
+            sf.unlink()
+            deleted_rollout_file = True
+            _prune_empty_session_dirs(sf.parent, base / "sessions")
 
     # 2. Scrub from history.jsonl
     history_path = base / "history.jsonl"
     if history_path.is_file():
+        tmp_path = history_path.with_name(f"{history_path.name}.tmp")
         try:
-            # Read all lines, keep only those not matching sid
-            lines = []
-            with open(history_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    if not line.strip():
+            with history_path.open("r", encoding="utf-8") as source, tmp_path.open(
+                "w", encoding="utf-8"
+            ) as target:
+                for line in source:
+                    stripped = line.strip()
+                    if not stripped:
+                        target.write(line)
                         continue
                     try:
                         obj = json.loads(line)
                         if obj.get("session_id") != sid:
-                            lines.append(line)
+                            target.write(line)
+                        else:
+                            removed_history_rows += 1
                     except json.JSONDecodeError:
-                        lines.append(line)
-            
-            # Write back atomically or just overwrite
-            tmp_path = history_path.with_suffix(".jsonl.tmp")
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                for line in lines:
-                    f.write(line)
+                        target.write(line)
             os.replace(tmp_path, history_path)
         except OSError:
-            pass
+            tmp_path.unlink(missing_ok=True)
+            raise
+
+    return DeleteSessionResult(
+        deleted_rollout_file=deleted_rollout_file,
+        removed_history_rows=removed_history_rows,
+    )

@@ -1,8 +1,10 @@
-"""Chat list widget — scrollable list of conversations for the left panel."""
+"""Chat list widget - scrollable list of conversations for the left panel."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Optional
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
@@ -75,8 +77,8 @@ class DateSeparator(Static):
 
     DEFAULT_CSS = """
     DateSeparator {
-        height: 3;
-        padding: 1 2;
+        height: 1;
+        padding: 0 1;
         content-align-vertical: middle;
         background: $surface-lighten-1;
         color: $text-muted;
@@ -89,23 +91,20 @@ class DateSeparator(Static):
         super().__init__(label, **kwargs)
 
 
-def get_date_group(dt: datetime) -> str:
-    now = datetime.now(timezone.utc)
+def get_date_group(dt: datetime, now: datetime | None = None) -> str:
+    """Return the logical date bucket for a conversation timestamp."""
+    now = now or datetime.now(timezone.utc)
+
     # Compare local dates instead of strict 24h periods
     local_now = now.astimezone().date()
-    local_dt = dt.astimezone().date()
+    local_dt = dt.astimezone().date() if dt.tzinfo else dt.date()
     delta = (local_now - local_dt).days
 
-    if delta == 0:
+    if delta <= 0:
         return "Today"
-    elif delta == 1:
+    if delta == 1:
         return "Yesterday"
-    elif delta <= 7:
-        return "Previous 7 Days"
-    elif delta <= 30:
-        return "Previous 30 Days"
-    else:
-        return "Older"
+    return "Older"
 
 
 class ChatList(Widget):
@@ -145,7 +144,7 @@ class ChatList(Widget):
     class ConversationSelected(TextualMessage):
         """Posted when a conversation is selected."""
 
-        def __init__(self, conversation: Conversation) -> None:
+        def __init__(self, conversation: Optional[Conversation]) -> None:
             super().__init__()
             self.conversation = conversation
 
@@ -174,13 +173,17 @@ class ChatList(Widget):
             self.selected_index = 0
             self._highlight_selected()
             self.post_message(self.ConversationSelected(self._filtered[0]))
+        else:
+            self.post_message(self.ConversationSelected(None))
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Filter conversations when the search input changes."""
         self.search_query = event.value.lower().strip()
         self._apply_filter()
 
-    def _apply_filter(self) -> None:
+    def _apply_filter(
+        self, preferred_id: str | None = None, fallback_index: int = 0
+    ) -> None:
         """Filter conversations based on the search query."""
         query = self.search_query
         if not query:
@@ -199,11 +202,36 @@ class ChatList(Widget):
                     if m.content
                 )
             ]
-        self.selected_index = 0
+        self.selected_index = self._resolve_selected_index(
+            preferred_id=preferred_id,
+            fallback_index=fallback_index,
+        )
         self._rebuild_list()
+        self._emit_selection()
+
+    def _resolve_selected_index(
+        self, preferred_id: str | None = None, fallback_index: int = 0
+    ) -> int:
+        """Resolve a valid selected index after filtering or refreshing."""
+        if not self._filtered:
+            return 0
+
+        if preferred_id:
+            for index, conversation in enumerate(self._filtered):
+                if conversation.id == preferred_id:
+                    return index
+
+        return min(max(fallback_index, 0), len(self._filtered) - 1)
+
+    def _emit_selection(self) -> None:
+        """Notify the app about the currently selected conversation."""
         if self._filtered:
             self._highlight_selected()
-            self.post_message(self.ConversationSelected(self._filtered[0]))
+            self.post_message(
+                self.ConversationSelected(self._filtered[self.selected_index])
+            )
+        else:
+            self.post_message(self.ConversationSelected(None))
 
     def _rebuild_list(self) -> None:
         """Rebuild the conversation list widgets."""
@@ -211,7 +239,7 @@ class ChatList(Widget):
         container.remove_children()
         
         last_group = None
-        for i, conv in enumerate(self._filtered):
+        for conv in self._filtered:
             group = get_date_group(conv.last_modified)
             if group != last_group:
                 container.mount(DateSeparator(group))
@@ -278,17 +306,17 @@ class ChatList(Widget):
 
     def remove_conversation(self, sid: str) -> None:
         """Remove a conversation by ID from the lists and rebuild."""
+        fallback_index = self.selected_index
         self.all_conversations = [c for c in self.all_conversations if c.id != sid]
-        self._filtered = [c for c in self._filtered if c.id != sid]
-        
-        # Adjust selected index
-        if self.selected_index >= len(self._filtered):
-            self.selected_index = max(0, len(self._filtered) - 1)
-            
-        self._rebuild_list()
-        
-        if self._filtered:
-            self._highlight_selected()
-            self.post_message(self.ConversationSelected(self._filtered[self.selected_index]))
-        else:
-            self.post_message(self.ConversationSelected(None))
+        self._apply_filter(fallback_index=fallback_index)
+
+    def replace_conversations(
+        self,
+        conversations: list[Conversation],
+        *,
+        preferred_id: str | None = None,
+        fallback_index: int = 0,
+    ) -> None:
+        """Replace the backing data and refresh the visible list."""
+        self.all_conversations = list(conversations)
+        self._apply_filter(preferred_id=preferred_id, fallback_index=fallback_index)
