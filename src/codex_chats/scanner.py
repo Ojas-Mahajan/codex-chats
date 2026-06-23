@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -128,3 +129,43 @@ def scan_conversations(base_dir: str | Path) -> list[Conversation]:
     # Sort by last_modified descending (newest first)
     results.sort(key=lambda c: c.last_modified, reverse=True)
     return results
+
+
+def delete_session_data(base_dir: str | Path, sid: str, session_file: str) -> None:
+    """Delete a session's rollout file and remove it from history.jsonl."""
+    base = Path(base_dir)
+    
+    # 1. Delete rollout file
+    if session_file:
+        sf = Path(session_file)
+        if sf.is_file():
+            try:
+                sf.unlink()
+            except OSError:
+                pass
+
+    # 2. Scrub from history.jsonl
+    history_path = base / "history.jsonl"
+    if history_path.is_file():
+        try:
+            # Read all lines, keep only those not matching sid
+            lines = []
+            with open(history_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        obj = json.loads(line)
+                        if obj.get("session_id") != sid:
+                            lines.append(line)
+                    except json.JSONDecodeError:
+                        lines.append(line)
+            
+            # Write back atomically or just overwrite
+            tmp_path = history_path.with_suffix(".jsonl.tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                for line in lines:
+                    f.write(line)
+            os.replace(tmp_path, history_path)
+        except OSError:
+            pass

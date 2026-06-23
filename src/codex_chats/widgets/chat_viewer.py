@@ -198,6 +198,10 @@ class ConversationHeader(Static):
 class ChatViewer(Widget):
     """Right panel: displays the selected conversation's transcript."""
 
+    BINDINGS = [
+        Binding("left,h", "focus_left", "Focus Left", show=False),
+    ]
+
     DEFAULT_CSS = """
     ChatViewer {
         width: 1fr;
@@ -213,6 +217,10 @@ class ChatViewer(Widget):
             EmptyState("Select a conversation to view its history"),
             id="viewer-scroll",
         )
+
+    def action_focus_left(self) -> None:
+        """Return focus to the list."""
+        self.app.action_focus_list()
 
     def show_conversation(self, conversation: Conversation) -> None:
         """Display a conversation's full transcript."""

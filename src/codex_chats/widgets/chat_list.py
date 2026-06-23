@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
@@ -69,13 +70,56 @@ class ConversationItem(Static):
             yield Static(line2, classes="meta-text", markup=False)
 
 
+class DateSeparator(Static):
+    """A separator grouping conversations by date."""
+
+    DEFAULT_CSS = """
+    DateSeparator {
+        height: 3;
+        padding: 1 2;
+        content-align-vertical: middle;
+        background: $surface-lighten-1;
+        color: $text-muted;
+        text-style: bold;
+        border-bottom: solid $surface-lighten-2;
+    }
+    """
+
+    def __init__(self, label: str, **kwargs) -> None:
+        super().__init__(label, **kwargs)
+
+
+def get_date_group(dt: datetime) -> str:
+    now = datetime.now(timezone.utc)
+    # Compare local dates instead of strict 24h periods
+    local_now = now.astimezone().date()
+    local_dt = dt.astimezone().date()
+    delta = (local_now - local_dt).days
+
+    if delta == 0:
+        return "Today"
+    elif delta == 1:
+        return "Yesterday"
+    elif delta <= 7:
+        return "Previous 7 Days"
+    elif delta <= 30:
+        return "Previous 30 Days"
+    else:
+        return "Older"
+
+
 class ChatList(Widget):
     """Left panel: scrollable, filterable list of conversations."""
+
+    can_focus = True
 
     DEFAULT_CSS = """
     ChatList {
         width: 1fr;
         height: 1fr;
+    }
+    ChatList:focus {
+        border: solid $accent;
     }
     ChatList #search-input {
         dock: top;
@@ -91,6 +135,7 @@ class ChatList(Widget):
     BINDINGS = [
         Binding("up,k", "cursor_up", "Up", show=False),
         Binding("down,j", "cursor_down", "Down", show=False),
+        Binding("right,l", "focus_right", "Focus Right", show=False),
         Binding("enter,o", "open_session", "Open Session", show=False),
     ]
 
@@ -164,7 +209,14 @@ class ChatList(Widget):
         """Rebuild the conversation list widgets."""
         container = self.query_one("#conversation-list", Vertical)
         container.remove_children()
+        
+        last_group = None
         for i, conv in enumerate(self._filtered):
+            group = get_date_group(conv.last_modified)
+            if group != last_group:
+                container.mount(DateSeparator(group))
+                last_group = group
+            
             container.mount(ConversationItem(conv))
 
     def _highlight_selected(self) -> None:
@@ -197,6 +249,10 @@ class ChatList(Widget):
                 self.ConversationSelected(self._filtered[self.selected_index])
             )
 
+    def action_focus_right(self) -> None:
+        """Move focus to the right panel."""
+        self.app.action_focus_right_panel()
+
     def action_open_session(self) -> None:
         """Open the currently selected session."""
         if self._filtered and 0 <= self.selected_index < len(self._filtered):
@@ -219,3 +275,20 @@ class ChatList(Widget):
                         self.ConversationSelected(self._filtered[i])
                     )
                 break
+
+    def remove_conversation(self, sid: str) -> None:
+        """Remove a conversation by ID from the lists and rebuild."""
+        self.all_conversations = [c for c in self.all_conversations if c.id != sid]
+        self._filtered = [c for c in self._filtered if c.id != sid]
+        
+        # Adjust selected index
+        if self.selected_index >= len(self._filtered):
+            self.selected_index = max(0, len(self._filtered) - 1)
+            
+        self._rebuild_list()
+        
+        if self._filtered:
+            self._highlight_selected()
+            self.post_message(self.ConversationSelected(self._filtered[self.selected_index]))
+        else:
+            self.post_message(self.ConversationSelected(None))
