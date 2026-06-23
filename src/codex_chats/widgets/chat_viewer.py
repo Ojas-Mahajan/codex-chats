@@ -189,6 +189,9 @@ class ConversationHeader(Static):
         width: 100%;
         margin-top: 1;
     }
+    ConversationHeader #header-actions Button:focus {
+        text-style: bold reverse;
+    }
     """
 
     def __init__(self, conversation: Conversation, **kwargs) -> None:

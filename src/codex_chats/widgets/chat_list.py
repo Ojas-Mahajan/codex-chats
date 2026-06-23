@@ -77,18 +77,18 @@ class DateSeparator(Static):
 
     DEFAULT_CSS = """
     DateSeparator {
-        height: 1;
+        height: 3;
         padding: 0 1;
-        content-align-vertical: middle;
-        background: $surface-lighten-1;
-        color: $text-muted;
+        content-align: left middle;
+        background: $primary 20%;
+        color: $text;
         text-style: bold;
-        border-bottom: solid $surface-lighten-2;
+        border-left: thick $accent;
     }
     """
 
     def __init__(self, label: str, **kwargs) -> None:
-        super().__init__(label, **kwargs)
+        super().__init__(f"  {label.upper()}", markup=False, **kwargs)
 
 
 def get_date_group(dt: datetime, now: datetime | None = None) -> str:
@@ -161,6 +161,27 @@ class ChatList(Widget):
         super().__init__(**kwargs)
         self.all_conversations = conversations
         self._filtered: list[Conversation] = list(conversations)
+        self._search_index = self._build_search_index(conversations)
+
+    def _build_search_index(
+        self, conversations: list[Conversation]
+    ) -> dict[str, str]:
+        """Precompute lowercase searchable text for fast incremental filtering."""
+        index = {}
+        for conversation in conversations:
+            parts = [
+                conversation.title,
+                conversation.id,
+                conversation.model,
+                conversation.cwd,
+            ]
+            parts.extend(
+                message.content or ""
+                for message in conversation.messages
+                if message.content
+            )
+            index[conversation.id] = "\n".join(parts).lower()
+        return index
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="🔍 Search conversations…", id="search-input")
@@ -192,15 +213,7 @@ class ChatList(Widget):
             self._filtered = [
                 c
                 for c in self.all_conversations
-                if query in c.title.lower()
-                or query in c.id.lower()
-                or query in c.model.lower()
-                or query in c.cwd.lower()
-                or any(
-                    query in (m.content or "").lower()
-                    for m in c.messages
-                    if m.content
-                )
+                if query in self._search_index.get(c.id, "")
             ]
         self.selected_index = self._resolve_selected_index(
             preferred_id=preferred_id,
@@ -308,6 +321,7 @@ class ChatList(Widget):
         """Remove a conversation by ID from the lists and rebuild."""
         fallback_index = self.selected_index
         self.all_conversations = [c for c in self.all_conversations if c.id != sid]
+        self._search_index.pop(sid, None)
         self._apply_filter(fallback_index=fallback_index)
 
     def replace_conversations(
@@ -319,4 +333,5 @@ class ChatList(Widget):
     ) -> None:
         """Replace the backing data and refresh the visible list."""
         self.all_conversations = list(conversations)
+        self._search_index = self._build_search_index(self.all_conversations)
         self._apply_filter(preferred_id=preferred_id, fallback_index=fallback_index)
