@@ -45,6 +45,7 @@ class MessageBlock(Static):
         margin: 0;
         padding: 0 1;
         border-left: thick transparent;
+        height: auto;
     }
     MessageBlock.user-message {
         border-left: thick #555555;
@@ -62,26 +63,11 @@ class MessageBlock(Static):
         border-left: thick #333333;
         background: $surface;
     }
-    MessageBlock .msg-header {
-        color: $text;
-        text-style: bold;
-    }
-    MessageBlock .msg-timestamp {
-        color: $text-muted;
-    }
-    MessageBlock .msg-content {
-        color: $text;
-        margin-top: 0;
-    }
-    MessageBlock .msg-tools {
-        color: $accent;
-        margin-top: 0;
-    }
     """
 
     def __init__(self, message: Message, **kwargs) -> None:
-        super().__init__(**kwargs)
         self.message = message
+        super().__init__(self._render_message(), markup=False, **kwargs)
         self._set_role_class()
 
     def _set_role_class(self) -> None:
@@ -98,28 +84,26 @@ class MessageBlock(Static):
         else:
             self.add_class("tool-message")
 
-    def compose(self) -> ComposeResult:
+    def _render_message(self) -> str:
+        """Build a compact plain-text block for a message."""
         msg = self.message
         ts = _format_timestamp(msg)
-
-        yield Static(
-            f"{msg.role_icon}  {msg.role_label}  ─  {msg.display_type}",
-            classes="msg-header",
-            markup=False,
-        )
+        lines = [f"{msg.role_icon}  {msg.role_label}  -  {msg.display_type}"]
 
         if ts:
-            yield Static(f"   {ts}", classes="msg-timestamp", markup=False)
+            lines.append(f"   {ts}")
 
         if msg.content:
             content = msg.content
             if len(content) > 3000:
                 content = content[:3000] + "\n\n...content truncated for display..."
-            yield Static(content, classes="msg-content", markup=False)
+            lines.extend(["", content])
 
         if msg.tool_calls:
             tools_text = _format_tool_calls(msg)
-            yield Static(tools_text, classes="msg-tools", markup=False)
+            lines.extend(["", tools_text])
+
+        return "\n".join(lines)
 
 
 class EmptyState(Static):
@@ -141,22 +125,26 @@ class ConversationHeader(Static):
 
     DEFAULT_CSS = """
     ConversationHeader {
-        height: auto;
+        height: 4;
         padding: 0 1;
         background: $surface-lighten-1;
         border-bottom: solid #333333;
     }
     ConversationHeader #header-content {
         width: 1fr;
+        height: 4;
     }
     ConversationHeader .conv-title {
+        height: 1;
         text-style: bold;
         color: $text;
     }
     ConversationHeader .conv-id {
+        height: 1;
         color: $text-muted;
     }
     ConversationHeader .conv-meta {
+        height: 2;
         color: $text-disabled;
         margin-top: 0;
     }
@@ -207,7 +195,7 @@ class ChatViewer(Widget):
         border: solid #555555;
     }
     ChatViewer #viewer-header {
-        height: auto;
+        height: 4;
     }
     ChatViewer #viewer-scroll {
         height: 1fr;
@@ -250,10 +238,15 @@ class ChatViewer(Widget):
             scroll.mount(EmptyState("This conversation has no messages."))
             return
 
-        # Mount message blocks
+        # Mount message blocks.
+        rendered_messages = 0
         for msg in conversation.messages:
             if msg.content or msg.tool_calls:
                 scroll.mount(MessageBlock(msg))
+                rendered_messages += 1
+
+        if rendered_messages == 0:
+            scroll.mount(EmptyState("This conversation has no displayable messages."))
 
         # Scroll to top
         scroll.scroll_home(animate=False)
