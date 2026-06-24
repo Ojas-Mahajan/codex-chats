@@ -1,4 +1,4 @@
-g"""Scan the Codex data directory (~/.codex/) to discover and index all conversations."""
+"""Scangit the Codex data directory (~/.codex/) to discover and index all conversations."""
 
 from __future__ import annotations
 

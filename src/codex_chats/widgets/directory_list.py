@@ -76,7 +76,11 @@ class DirectoryItem(Static):
         count_label = f"{self.entry.count} chat"
         if self.entry.count != 1:
             count_label += "s"
-        yield Static(self.entry.label, classes="directory-label", markup=False)
+        yield Static(
+            f"📁 {self.entry.label}",
+            classes="directory-label",
+            markup=False,
+        )
         yield Static(
             f"{count_label}  {self.entry.detail}",
             classes="directory-detail",
@@ -149,7 +153,7 @@ class DirectoryList(Widget):
         """Return the current directory header text."""
         total = self.entries[0].count if self.entries else 0
         chat_label = "chat" if total == 1 else "chats"
-        return f"DIRECTORIES\n{total} {chat_label}"
+        return f"📁 DIRECTORIES\n{total} {chat_label}"
 
     def compose(self) -> ComposeResult:
         yield DirectoryHeader(
