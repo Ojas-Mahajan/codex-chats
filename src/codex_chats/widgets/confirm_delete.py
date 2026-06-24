@@ -11,7 +11,7 @@ class ConfirmDeleteDialog(ModalScreen[bool]):
     """Modal dialog to confirm session deletion."""
 
     BINDINGS = [
-        Binding("escape", "cancel", "Cancel", show=False),
+        Binding("c,escape", "cancel", "Cancel", show=False),
         Binding("d,delete", "confirm", "Delete", show=False),
         Binding("left,h", "focus_cancel", "Focus Cancel", show=False),
         Binding("right,l", "focus_delete", "Focus Delete", show=False),
@@ -58,8 +58,8 @@ class ConfirmDeleteDialog(ModalScreen[bool]):
                 f"\n\n[b]{display_title}[/b]",
                 id="question",
             )
-            yield Button("Cancel", variant="primary", id="cancel")
-            yield Button("Delete", variant="error", id="delete")
+            yield Button("Cancel (c)", variant="primary", id="cancel")
+            yield Button("Delete (d)", variant="error", id="delete")
 
     def on_mount(self) -> None:
         """Focus Cancel first so pressing Enter never deletes by default."""

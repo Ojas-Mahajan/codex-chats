@@ -61,6 +61,7 @@ codex-chats --data-dir /path/to/.codex
 - `Enter` on a directory: Apply that directory filter.
 - `Enter` or `o` on a conversation: Resume the selected session in Codex.
 - `d` or `Delete`: Delete the selected session after confirmation.
+- `c` or `Escape` in the delete dialog: Cancel deletion.
 - `c`: Copy the selected session ID.
 - `PageUp` / `PageDown`, `Home`, `End`: Navigate the transcript viewer.
 - `q`: Quit.
