@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -85,113 +85,180 @@ def parse_session_file(path: Path) -> tuple[dict, list[Message]]:
     msg_index = 0
 
     try:
-        raw_text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+        lines = path.open("r", encoding="utf-8")
+    except OSError:
         return meta, messages
 
-    for line in raw_text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    try:
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
 
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-
-        entry_type = obj.get("type", "")
-        timestamp = parse_timestamp(obj.get("timestamp"))
-        payload = obj.get("payload", {})
-
-        if entry_type == "session_meta":
-            meta = payload
-            continue
-
-        if entry_type == "turn_context":
-            # Extract model info from turn context
-            if "model" in payload:
-                meta["model"] = payload["model"]
-            continue
-
-        if entry_type != "response_item":
-            continue
-
-        role = payload.get("role", "")
-        msg_type = payload.get("type", "")
-
-        # Skip non-message types we don't care about
-        if msg_type not in ("message", "reasoning", "function_call", "function_call_output"):
-            continue
-
-        # Extract content
-        content = ""
-        tool_calls = []
-
-        if msg_type == "message":
-            content_list = payload.get("content", [])
-            if isinstance(content_list, list):
-                content = extract_message_text(content_list)
-            elif isinstance(content_list, str):
-                content = content_list
-
-        elif msg_type == "reasoning":
-            # Reasoning/thinking content
-            summary = payload.get("summary", [])
-            if isinstance(summary, list):
-                parts = []
-                for s in summary:
-                    if isinstance(s, dict):
-                        parts.append(s.get("text", ""))
-                    elif isinstance(s, str):
-                        parts.append(s)
-                content = "\n".join(parts)
-            elif isinstance(summary, str):
-                content = summary
-            if not content:
-                content = "[thinking...]"
-
-        elif msg_type == "function_call":
-            name = payload.get("name", "unknown")
-            args_str = payload.get("arguments", "{}")
             try:
-                args = json.loads(args_str) if isinstance(args_str, str) else args_str
+                obj = json.loads(line)
             except json.JSONDecodeError:
-                args = {"raw": args_str}
-            tool_calls.append(ToolCall(name=name, args=args if isinstance(args, dict) else {"raw": str(args)}))
-            content = f"🔧 {name}"
+                continue
 
-        elif msg_type == "function_call_output":
-            output = payload.get("output", "")
-            if isinstance(output, list):
-                parts = []
-                for item in output:
-                    if isinstance(item, dict):
-                        if item.get("type") == "input_image":
-                            parts.append("[Image Output]")
+            entry_type = obj.get("type", "")
+            timestamp = parse_timestamp(obj.get("timestamp"))
+            payload = obj.get("payload", {})
+
+            if entry_type == "session_meta":
+                meta = payload
+                continue
+
+            if entry_type == "turn_context":
+                # Extract model info from turn context
+                if "model" in payload:
+                    meta["model"] = payload["model"]
+                continue
+
+            if entry_type != "response_item":
+                continue
+
+            role = payload.get("role", "")
+            msg_type = payload.get("type", "")
+
+            # Skip non-message types we don't care about
+            if msg_type not in (
+                "message",
+                "reasoning",
+                "function_call",
+                "function_call_output",
+            ):
+                continue
+
+            # Extract content
+            content = ""
+            tool_calls = []
+
+            if msg_type == "message":
+                content_list = payload.get("content", [])
+                if isinstance(content_list, list):
+                    content = extract_message_text(content_list)
+                elif isinstance(content_list, str):
+                    content = content_list
+
+            elif msg_type == "reasoning":
+                # Reasoning/thinking content
+                summary = payload.get("summary", [])
+                if isinstance(summary, list):
+                    parts = []
+                    for s in summary:
+                        if isinstance(s, dict):
+                            parts.append(s.get("text", ""))
+                        elif isinstance(s, str):
+                            parts.append(s)
+                    content = "\n".join(parts)
+                elif isinstance(summary, str):
+                    content = summary
+                if not content:
+                    content = "[thinking...]"
+
+            elif msg_type == "function_call":
+                name = payload.get("name", "unknown")
+                args_str = payload.get("arguments", "{}")
+                try:
+                    args = json.loads(args_str) if isinstance(args_str, str) else args_str
+                except json.JSONDecodeError:
+                    args = {"raw": args_str}
+                tool_calls.append(
+                    ToolCall(
+                        name=name,
+                        args=args if isinstance(args, dict) else {"raw": str(args)},
+                    )
+                )
+                content = f"🔧 {name}"
+
+            elif msg_type == "function_call_output":
+                output = payload.get("output", "")
+                if isinstance(output, list):
+                    parts = []
+                    for item in output:
+                        if isinstance(item, dict):
+                            if item.get("type") == "input_image":
+                                parts.append("[Image Output]")
+                            else:
+                                parts.append(str(item))
                         else:
                             parts.append(str(item))
-                    else:
-                        parts.append(str(item))
-                output_str = "\n".join(parts)
-            else:
-                output_str = str(output)
-            content = output_str[:2000] if output_str else "[no output]"
+                    output_str = "\n".join(parts)
+                else:
+                    output_str = str(output)
+                content = output_str[:2000] if output_str else "[no output]"
 
-        # Skip empty messages and developer/system context
-        if not content and not tool_calls:
-            continue
-        if role == "developer":
-            continue
+            # Skip empty messages and developer/system context
+            if not content and not tool_calls:
+                continue
+            if role == "developer":
+                continue
 
-        msg = Message(
-            index=msg_index,
-            role=role or "system",
-            content=content,
-            timestamp=timestamp,
-            msg_type=msg_type,
-            tool_calls=tool_calls,
-        )
-        messages.append(msg)
-        msg_index += 1
+            msg = Message(
+                index=msg_index,
+                role=role or "system",
+                content=content,
+                timestamp=timestamp,
+                msg_type=msg_type,
+                tool_calls=tool_calls,
+            )
+            messages.append(msg)
+            msg_index += 1
+    except UnicodeDecodeError:
+        return meta, messages
+    finally:
+        lines.close()
 
     return meta, messages
+
+
+def parse_session_metadata(path: Path) -> dict:
+    """Parse only lightweight session metadata needed for list/search views."""
+    meta = {}
+    have_cwd = False
+    have_model = False
+
+    try:
+        lines = path.open("r", encoding="utf-8")
+    except OSError:
+        return meta
+
+    try:
+        for line in lines:
+            if have_cwd and have_model:
+                break
+
+            line = line.strip()
+            if not line:
+                continue
+
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            entry_type = obj.get("type", "")
+            payload = obj.get("payload", {})
+
+            if entry_type == "session_meta":
+                cwd = payload.get("cwd")
+                if cwd:
+                    meta["cwd"] = cwd
+                    have_cwd = True
+                model = payload.get("model")
+                if model:
+                    meta["model"] = model
+                    have_model = True
+                continue
+
+            if entry_type == "turn_context":
+                model = payload.get("model")
+                if model:
+                    meta["model"] = model
+                    have_model = True
+    except UnicodeDecodeError:
+        return meta
+    finally:
+        lines.close()
+
+    return meta

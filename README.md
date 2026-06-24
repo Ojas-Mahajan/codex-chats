@@ -1,90 +1,79 @@
-# Codex Chat History
+# Codex Chats
 
-A beautiful Terminal User Interface (TUI) application to browse, search, and view your [Codex](https://github.com/codex-org/codex) conversation history. 
+Terminal UI for browsing, searching, opening, and cleaning up local Codex CLI conversation history.
 
-Built with Python and [Textual](https://github.com/Textualize/textual), this tool allows you to easily find past conversations and jump back into them directly from your terminal.
-
-![Demo](./demo.png) *(Add a screenshot here if you'd like!)*
+`codex-chats` reads your `~/.codex` data, shows conversations in a three-pane layout, and lets you resume a selected session with `codex resume` without leaving the terminal workflow.
 
 ## Features
 
-- **Fast, Filterable Search**: Quickly filter your 100+ past Codex sessions by title, session ID, model name (e.g., `gpt-5.5`), or working directory.
-- **Directory Sidebar**: Filter conversations by project directory from the leftmost pane.
-- **Date Separators**: Conversations are grouped into readable buckets: Today, Yesterday, and Older.
-- **Rich Transcript Viewer**: View your entire chat history with a fully formatted layout:
-  - User and Assistant messages color-coded and cleanly separated.
-  - Codex reasoning/thinking steps properly displayed.
-  - Tool calls cleanly summarized (instead of dumping raw JSON).
-- **Compact Transcript Layout**: The selected conversation starts immediately below its metadata instead of leaving a large empty gap.
-- **Open in Codex**: Seamlessly resume any past conversation with `Enter` or `o`, suspending the TUI and jumping right back into the selected interactive Codex session in your current terminal tab.
-- **Delete Sessions**: Press `d` or `Delete`, confirm the modal, and the app removes the session from your local Codex data before refreshing the list.
-- **Three-Pane Keyboard Navigation**: Move between directories, conversations, and transcript with `Left` / `Right` or `h` / `l`.
-- **Instant Resume**: When you exit the Codex session, you're immediately dropped back into the TUI right where you left off!
+- **Fast metadata search**: Filter conversations by title, session ID, model, or working directory.
+- **Directory filtering**: Use the left sidebar to show all chats or only chats from a specific project directory.
+- **Conversation list grouping**: Chats are sorted newest first and grouped into Today, Yesterday, and Older sections.
+- **Lazy transcript loading**: Startup and search only load lightweight metadata. Full rollout transcripts are parsed when a conversation is selected.
+- **Transcript viewer**: Read user, assistant, reasoning, tool-call, and tool-output entries in a formatted right-hand pane.
+- **Resume in Codex**: Press `Enter` or `o` to suspend the TUI and run `codex resume <session-id>` from the saved working directory when it still exists.
+- **Delete sessions**: Remove a session's rollout file and matching `history.jsonl` rows after confirmation.
+- **Clipboard support**: Copy the selected session ID with `c`.
+- **Keyboard-first navigation**: Move between directories, conversations, and transcripts with arrow keys or `h` / `j` / `k` / `l`.
+- **Custom data directory**: Point the app at another Codex data directory with `--data-dir`.
 
 ## Requirements
 
 - Python 3.10+
-- Codex CLI (`codex`) installed and available in your PATH.
-- Your Codex data located at `~/.codex/`.
+- Codex CLI installed and available as `codex`
+- A Codex data directory containing `history.jsonl`, usually `~/.codex`
 
-## Setup & Installation
+## Installation
 
-1. **Clone/Navigate to the repository:**
-   ```bash
-   cd /path/to/codex-chats
-   ```
+```bash
+cd /path/to/codex-chats
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
 
-2. **Set up a virtual environment:**
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
+The repository also includes a wrapper script named `codex-chats`. To run it from anywhere, make it executable and symlink it into a directory on your `PATH`:
 
-3. **Install dependencies:**
-   ```bash
-   pip install -e .
-   ```
-
-4. **Global Setup (Optional but Recommended):**
-   To run `codex-chats` from anywhere on your system without manually activating the virtual environment, you can use the included wrapper script:
-   ```bash
-   # Ensure the wrapper script is executable
-   chmod +x codex-chats
-   
-   # Symlink it to a directory in your PATH (e.g., ~/.local/bin)
-   ln -s "$(pwd)/codex-chats" ~/.local/bin/codex-chats
-   ```
+```bash
+chmod +x codex-chats
+ln -s "$(pwd)/codex-chats" ~/.local/bin/codex-chats
+```
 
 ## Usage
-
-Simply type `codex-chats` anywhere in your terminal!
 
 ```bash
 codex-chats
 ```
 
-### Keyboard Shortcuts
+Use a different Codex data directory:
 
-- **`Up` / `Down`** or **`j` / `k`**: Navigate the focused directory list or conversation list.
-- **`/`**: Focus the search bar.
-- **`Escape`**: Return focus from the search bar (or the transcript viewer) back to the conversation list.
-- **`Left`** or **`h`**: Move from conversations to directories, or from transcript back to conversations.
-- **`Right`** or **`l`**: Move from directories to conversations, or from conversations to transcript.
-- **`Enter`** on a directory: Filter the conversation list to that directory.
-- **`Enter`** or **`o`**: Resume the currently selected session in Codex.
-- **`d`** or **`Delete`**: Delete the selected session after confirmation.
-- **`c`**: Copy the Session ID to your clipboard.
-- **`q`**: Quit the application.
+```bash
+codex-chats --data-dir /path/to/.codex
+```
 
-## How it works
+## Keyboard Shortcuts
 
-The app parses two sets of files generated by Codex:
-1. `~/.codex/history.jsonl`: Used as an incredibly fast index to load all available sessions, metadata, and timestamps instantly.
-2. `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`: The rich transcript files containing the full conversation, which are lazily parsed and formatted only when you select a conversation.
+- `Up` / `Down` or `j` / `k`: Move through the focused directory list, conversation list, or transcript.
+- `/`: Focus the search box.
+- `Escape`: Return focus to the conversation list.
+- `Left` or `h`: Move focus from conversations to directories, or from transcript back to conversations.
+- `Right` or `l`: Move focus from directories to conversations, or from conversations to transcript.
+- `Enter` on a directory: Apply that directory filter.
+- `Enter` or `o` on a conversation: Resume the selected session in Codex.
+- `d` or `Delete`: Delete the selected session after confirmation.
+- `c`: Copy the selected session ID.
+- `PageUp` / `PageDown`, `Home`, `End`: Navigate the transcript viewer.
+- `q`: Quit.
 
-The directory sidebar is derived from each session's recorded working directory. Choosing a directory filters the in-memory conversation list; it does not override the saved directory used by `codex resume`.
+## How It Works
 
-When you delete a session, the app removes its rollout file, scrubs matching rows from `history.jsonl` using a temporary file plus atomic replace, rescans the Codex data directory, and refreshes the visible list while keeping your current search filter.
+Codex stores a lightweight command history in `~/.codex/history.jsonl` and full session transcripts under `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
+
+`codex-chats` uses `history.jsonl` as the primary index, scans rollout filenames once to connect session IDs to transcript files, and reads only session metadata such as model and working directory during startup. This keeps the conversation list and search responsive even when transcript files are large.
+
+When you select a conversation, the app parses that one rollout file and renders the transcript. Parsed messages are cached on the selected conversation object for the rest of the app session.
+
+When you delete a conversation, the app removes the rollout file, prunes empty session directories, rewrites `history.jsonl` without rows for that session, and refreshes the visible list while preserving the current directory/search context where possible.
 
 ## License
 

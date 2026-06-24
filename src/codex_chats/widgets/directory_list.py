@@ -9,13 +9,13 @@ from typing import Optional
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
 from textual.message import Message as TextualMessage
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
 from ..models import Conversation
+from .hidden_scroll import HiddenScrollVertical
 
 
 DirectoryFilter = Optional[str]
@@ -122,7 +122,7 @@ class DirectoryList(Widget):
         self.active_directory: DirectoryFilter = None
 
     def compose(self) -> ComposeResult:
-        yield Vertical(id="directory-list")
+        yield HiddenScrollVertical(id="directory-list")
 
     def on_mount(self) -> None:
         """Populate the directory list."""
@@ -168,14 +168,14 @@ class DirectoryList(Widget):
 
     def _rebuild_list(self) -> None:
         """Rebuild directory row widgets."""
-        container = self.query_one("#directory-list", Vertical)
+        container = self.query_one("#directory-list", HiddenScrollVertical)
         container.remove_children()
         for entry in self.entries:
             container.mount(DirectoryItem(entry))
 
     def _highlight_selected(self) -> None:
         """Update selected and active visual states."""
-        container = self.query_one("#directory-list", Vertical)
+        container = self.query_one("#directory-list", HiddenScrollVertical)
         items = list(container.query(DirectoryItem))
         for index, item in enumerate(items):
             if index == self.selected_index:
@@ -228,7 +228,7 @@ class DirectoryList(Widget):
 
     def on_click(self, event) -> None:
         """Handle click on a directory row."""
-        container = self.query_one("#directory-list", Vertical)
+        container = self.query_one("#directory-list", HiddenScrollVertical)
         items = list(container.query(DirectoryItem))
         for index, item in enumerate(items):
             if item is event.widget or item in event.widget.ancestors_with_self:

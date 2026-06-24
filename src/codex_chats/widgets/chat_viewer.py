@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical, VerticalScroll
+from textual.containers import Vertical
 from textual.widget import Widget
 from textual.widgets import Static
 
 from ..models import Conversation, Message
+from ..parser import parse_session_file
+from .hidden_scroll import HiddenVerticalScroll
 
 
 def _format_timestamp(msg: Message) -> str:
@@ -184,6 +188,12 @@ class ChatViewer(Widget):
 
     BINDINGS = [
         Binding("left,h", "focus_left", "Focus Left", show=False),
+        Binding("up,k", "scroll_up", "Scroll Up", show=False),
+        Binding("down,j", "scroll_down", "Scroll Down", show=False),
+        Binding("pageup", "page_up", "Page Up", show=False),
+        Binding("pagedown", "page_down", "Page Down", show=False),
+        Binding("home", "scroll_home", "Top", show=False),
+        Binding("end", "scroll_end", "Bottom", show=False),
     ]
 
     DEFAULT_CSS = """
@@ -203,7 +213,7 @@ class ChatViewer(Widget):
 
     def compose(self) -> ComposeResult:
         yield Vertical(id="viewer-header")
-        yield VerticalScroll(
+        yield HiddenVerticalScroll(
             EmptyState("Select a conversation to view its history"),
             id="viewer-scroll",
         )
@@ -212,12 +222,54 @@ class ChatViewer(Widget):
         """Return focus to the list."""
         self.app.action_focus_list()
 
+    def _viewer_scroll(self) -> HiddenVerticalScroll:
+        """Return the transcript scroll container."""
+        return self.query_one("#viewer-scroll", HiddenVerticalScroll)
+
+    def action_scroll_up(self) -> None:
+        """Scroll the transcript up."""
+        self._viewer_scroll().scroll_up(animate=False)
+
+    def action_scroll_down(self) -> None:
+        """Scroll the transcript down."""
+        self._viewer_scroll().scroll_down(animate=False)
+
+    def action_page_up(self) -> None:
+        """Scroll the transcript up by one page."""
+        self._viewer_scroll().scroll_page_up(animate=False)
+
+    def action_page_down(self) -> None:
+        """Scroll the transcript down by one page."""
+        self._viewer_scroll().scroll_page_down(animate=False)
+
+    def action_scroll_home(self) -> None:
+        """Scroll to the top of the transcript."""
+        self._viewer_scroll().scroll_home(animate=False)
+
+    def action_scroll_end(self) -> None:
+        """Scroll to the bottom of the transcript."""
+        self._viewer_scroll().scroll_end(animate=False)
+
+    def _ensure_transcript_loaded(self, conversation: Conversation) -> None:
+        """Load transcript messages for the selected conversation once."""
+        if conversation.transcript_loaded or not conversation.session_file:
+            return
+
+        meta, messages = parse_session_file(Path(conversation.session_file))
+        conversation.messages = messages
+        conversation.model = conversation.model or meta.get("model", "")
+        conversation.cwd = conversation.cwd or meta.get("cwd", "")
+        conversation.transcript_loaded = True
+
     def show_conversation(self, conversation: Conversation) -> None:
         """Display a conversation's full transcript."""
         header = self.query_one("#viewer-header", Vertical)
-        scroll = self.query_one("#viewer-scroll", VerticalScroll)
+        scroll = self._viewer_scroll()
         header.remove_children()
         scroll.remove_children()
+
+        if conversation.has_transcript:
+            self._ensure_transcript_loaded(conversation)
 
         # Mount the header
         header.mount(ConversationHeader(conversation))
@@ -253,7 +305,7 @@ class ChatViewer(Widget):
     def show_empty(self) -> None:
         """Show the empty state."""
         header = self.query_one("#viewer-header", Vertical)
-        scroll = self.query_one("#viewer-scroll", VerticalScroll)
+        scroll = self._viewer_scroll()
         header.remove_children()
         scroll.remove_children()
         scroll.mount(EmptyState("Select a conversation to view its history"))

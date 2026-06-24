@@ -37,10 +37,15 @@ class CodexChatsApp(App):
         height: 1fr;
     }
 
+    #directory-panel {
+        border-right: solid #242424;
+    }
+
     #left-panel {
         width: 38;
         min-width: 30;
         max-width: 55;
+        border-right: solid #242424;
         height: 1fr;
     }
 

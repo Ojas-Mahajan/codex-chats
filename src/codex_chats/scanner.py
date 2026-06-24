@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .models import Conversation
-from .parser import extract_title, parse_session_file
+from .parser import extract_title, parse_session_metadata
 
 
 @dataclass(frozen=True)
@@ -31,45 +31,82 @@ def _parse_history(history_path: Path) -> dict[str, dict]:
         return sessions
 
     try:
-        for line in history_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+        with history_path.open("r", encoding="utf-8") as lines:
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
 
-            sid = obj.get("session_id", "")
-            ts = obj.get("ts", 0)
-            text = obj.get("text", "")
+                sid = obj.get("session_id", "")
+                ts = obj.get("ts", 0)
+                text = obj.get("text", "")
 
-            if sid not in sessions:
-                sessions[sid] = {
-                    "first_msg": text,
-                    "last_ts": ts,
-                    "msg_count": 0,
-                }
-            sessions[sid]["msg_count"] += 1
-            # Track the latest timestamp
-            if ts > sessions[sid]["last_ts"]:
-                sessions[sid]["last_ts"] = ts
+                if sid not in sessions:
+                    sessions[sid] = {
+                        "first_msg": text,
+                        "last_ts": ts,
+                        "msg_count": 0,
+                    }
+                sessions[sid]["msg_count"] += 1
+                # Track the latest timestamp
+                if ts > sessions[sid]["last_ts"]:
+                    sessions[sid]["last_ts"] = ts
     except (OSError, UnicodeDecodeError):
         pass
 
     return sessions
 
 
-def _find_session_file(sessions_dir: Path, session_id: str) -> Path | None:
+def _extract_session_id_from_rollout(path: Path) -> str:
+    """Extract the session ID suffix from a rollout filename."""
+    name = path.name
+    prefix = "rollout-"
+    suffix = ".jsonl"
+    if not name.startswith(prefix) or not name.endswith(suffix):
+        return ""
+
+    stem = name.removesuffix(suffix)
+    # rollout-YYYY-MM-DDTHH-MM-SS-<session_id>
+    timestamp_parts = 5
+    parts = stem.removeprefix(prefix).split("-", timestamp_parts)
+    if len(parts) <= timestamp_parts:
+        return ""
+    return parts[-1]
+
+
+def _build_session_file_index(sessions_dir: Path) -> dict[str, Path]:
+    """Build a single-pass index of session ID to rollout JSONL path."""
+    index: dict[str, Path] = {}
+
+    if not sessions_dir.is_dir():
+        return index
+
+    for jsonl_file in sessions_dir.rglob("rollout-*.jsonl"):
+        session_id = _extract_session_id_from_rollout(jsonl_file)
+        if session_id:
+            index[session_id] = jsonl_file
+    return index
+
+
+def _find_session_file(
+    sessions_dir: Path, session_id: str, file_index: dict[str, Path] | None = None
+) -> Path | None:
     """Find the rollout JSONL file for a given session ID.
 
     Session files are named: rollout-YYYY-MM-DDTHH-MM-SS-<session_id>.jsonl
     stored under sessions/YYYY/MM/DD/
     """
+    if file_index is not None:
+        return file_index.get(session_id)
+
     if not sessions_dir.is_dir():
         return None
 
-    # Search all rollout files for one containing this session ID
+    # Fallback for unexpected filename formats.
     for jsonl_file in sessions_dir.rglob("rollout-*.jsonl"):
         if session_id in jsonl_file.name:
             return jsonl_file
@@ -96,6 +133,7 @@ def scan_conversations(base_dir: str | Path) -> list[Conversation]:
     if not session_index:
         return []
 
+    session_files = _build_session_file_index(sessions_dir)
     results: list[Conversation] = []
 
     for sid, info in session_index.items():
@@ -110,15 +148,14 @@ def scan_conversations(base_dir: str | Path) -> list[Conversation]:
         last_modified = datetime.fromtimestamp(last_ts, tz=timezone.utc)
 
         # Find the session rollout file
-        session_file = _find_session_file(sessions_dir, sid)
+        session_file = _find_session_file(sessions_dir, sid, session_files)
         has_transcript = session_file is not None
 
-        # Parse the session file for full transcript
-        messages = []
+        # Parse only lightweight metadata; transcripts are loaded on demand.
         model = ""
         cwd = ""
         if session_file:
-            meta, messages = parse_session_file(session_file)
+            meta = parse_session_metadata(session_file)
             model = meta.get("model", "")
             cwd = meta.get("cwd", "")
 
@@ -126,7 +163,6 @@ def scan_conversations(base_dir: str | Path) -> list[Conversation]:
             id=sid,
             title=title,
             last_modified=last_modified,
-            messages=messages,
             has_transcript=has_transcript,
             session_file=str(session_file) if session_file else "",
             model=model,

@@ -67,6 +67,7 @@ class Conversation:
     model: str = ""
     cwd: str = ""
     msg_count_from_history: int = 0
+    transcript_loaded: bool = False
 
     @property
     def date_label(self) -> str:

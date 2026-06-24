@@ -7,7 +7,6 @@ from typing import Optional
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
 from textual.message import Message as TextualMessage
 from textual.reactive import reactive
 from textual.widget import Widget
@@ -15,6 +14,7 @@ from textual.widgets import Input, Static
 
 from ..models import Conversation
 from .directory_list import DirectoryFilter, normalize_directory
+from .hidden_scroll import HiddenScrollVertical
 
 
 class ConversationItem(Static):
@@ -167,7 +167,7 @@ class ChatList(Widget):
     def _build_search_index(
         self, conversations: list[Conversation]
     ) -> dict[str, str]:
-        """Precompute lowercase searchable text for fast incremental filtering."""
+        """Precompute lowercase metadata text for fast incremental filtering."""
         index = {}
         for conversation in conversations:
             parts = [
@@ -176,17 +176,12 @@ class ChatList(Widget):
                 conversation.model,
                 conversation.cwd,
             ]
-            parts.extend(
-                message.content or ""
-                for message in conversation.messages
-                if message.content
-            )
             index[conversation.id] = "\n".join(parts).lower()
         return index
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="🔍 Search conversations…", id="search-input")
-        yield Vertical(id="conversation-list")
+        yield HiddenScrollVertical(id="conversation-list")
 
     def on_mount(self) -> None:
         """Populate the list on mount."""
@@ -255,21 +250,21 @@ class ChatList(Widget):
 
     def _rebuild_list(self) -> None:
         """Rebuild the conversation list widgets."""
-        container = self.query_one("#conversation-list", Vertical)
+        container = self.query_one("#conversation-list", HiddenScrollVertical)
         container.remove_children()
-        
+
         last_group = None
         for conv in self._filtered:
             group = get_date_group(conv.last_modified)
             if group != last_group:
                 container.mount(DateSeparator(group))
                 last_group = group
-            
+
             container.mount(ConversationItem(conv))
 
     def _highlight_selected(self) -> None:
         """Update the visual highlight for the selected conversation."""
-        container = self.query_one("#conversation-list", Vertical)
+        container = self.query_one("#conversation-list", HiddenScrollVertical)
         items = list(container.query(ConversationItem))
         for i, item in enumerate(items):
             if i == self.selected_index:
@@ -314,7 +309,7 @@ class ChatList(Widget):
 
     def on_click(self, event) -> None:
         """Handle click on a conversation item."""
-        container = self.query_one("#conversation-list", Vertical)
+        container = self.query_one("#conversation-list", HiddenScrollVertical)
         items = list(container.query(ConversationItem))
         for i, item in enumerate(items):
             if item is event.widget or item in event.widget.ancestors_with_self:
