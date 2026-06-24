@@ -121,7 +121,13 @@ class ChatList(Widget):
     ChatList #search-input {
         dock: top;
         margin: 0 0 0 0;
-        border: solid #333333;
+        color: $text;
+        background: #071521;
+        border: solid #1e3a5f;
+    }
+    ChatList #search-input:focus {
+        border: solid #2f8cff;
+        background: #0a1c2d;
     }
     ChatList #conversation-list {
         height: 1fr;
