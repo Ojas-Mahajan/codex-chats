@@ -187,9 +187,9 @@ class ChatViewer(Widget):
     can_focus = True
 
     BINDINGS = [
-        Binding("left,h", "focus_left", "Focus Left", show=False),
-        Binding("up,k", "scroll_up", "Scroll Up", show=False),
-        Binding("down,j", "scroll_down", "Scroll Down", show=False),
+        Binding("left,h", "focus_left", "Chats", show=True),
+        Binding("up,k", "scroll_up", "Scroll Up", show=True),
+        Binding("down,j", "scroll_down", "Scroll Down", show=True),
         Binding("pageup", "page_up", "Page Up", show=False),
         Binding("pagedown", "page_down", "Page Down", show=False),
         Binding("home", "scroll_home", "Top", show=False),
@@ -219,7 +219,7 @@ class ChatViewer(Widget):
         )
 
     def action_focus_left(self) -> None:
-        """Return focus to the list."""
+        """Return focus to the conversation list."""
         self.app.action_focus_list()
 
     def _viewer_scroll(self) -> HiddenVerticalScroll:

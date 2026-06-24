@@ -85,11 +85,29 @@ class DateSeparator(Static):
         color: $text-muted;
         text-style: bold;
         border-left: solid #333333;
+        border-bottom: solid #333333;
+    }
+    DateSeparator.today {
+        background: #0d1d2e;
+        color: #8fc5ff;
+        border-left: thick #2f8cff;
+    }
+    DateSeparator.yesterday {
+        background: #261f12;
+        color: #e7c16d;
+        border-left: thick #b8842a;
+    }
+    DateSeparator.older {
+        background: #10231f;
+        color: #82cdbc;
+        border-left: thick #2f8f7b;
     }
     """
 
     def __init__(self, label: str, **kwargs) -> None:
-        super().__init__(f"  {label.upper()}", markup=False, **kwargs)
+        existing_classes = kwargs.pop("classes", "")
+        classes = f"{existing_classes} {label.lower()}".strip()
+        super().__init__(f"  {label.upper()}", markup=False, classes=classes, **kwargs)
 
 
 def get_date_group(dt: datetime, now: datetime | None = None) -> str:
@@ -137,10 +155,10 @@ class ChatList(Widget):
     """
 
     BINDINGS = [
-        Binding("up,k", "cursor_up", "Up", show=False),
-        Binding("down,j", "cursor_down", "Down", show=False),
-        Binding("left,h", "focus_directory", "Focus Directories", show=False),
-        Binding("right,l", "focus_right", "Focus Right", show=False),
+        Binding("up,k", "cursor_up", "Up", show=True),
+        Binding("down,j", "cursor_down", "Down", show=True),
+        Binding("left,h", "focus_directory", "Directories", show=True),
+        Binding("right,l", "focus_right", "Transcript", show=True),
         Binding("enter,o", "open_session", "Open Session", show=False),
     ]
 
@@ -303,7 +321,7 @@ class ChatList(Widget):
         self.app.action_focus_directory_panel()
 
     def action_focus_right(self) -> None:
-        """Move focus to the right panel."""
+        """Move focus to the transcript viewer."""
         self.app.action_focus_right_panel()
 
     def action_open_session(self) -> None:

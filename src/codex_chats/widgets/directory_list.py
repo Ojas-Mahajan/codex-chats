@@ -43,18 +43,22 @@ class DirectoryItem(Static):
     DirectoryItem {
         height: 3;
         padding: 0 1;
-        border-bottom: solid #333333;
+        background: #111614;
+        border-bottom: solid #25312b;
         content-align-vertical: middle;
     }
     DirectoryItem:hover {
-        background: $surface-lighten-1;
+        background: #14211b;
     }
     DirectoryItem.--selected {
-        background: $surface-lighten-1;
-        border-left: thick #555555;
+        background: #172a21;
+        border-left: thick #38a169;
     }
     DirectoryItem.--active {
         text-style: bold;
+    }
+    DirectoryItem.--active .directory-label {
+        color: #9ae6b4;
     }
     DirectoryItem .directory-label {
         color: $text;
@@ -80,6 +84,22 @@ class DirectoryItem(Static):
         )
 
 
+class DirectoryHeader(Static):
+    """Compact header for the directory filter pane."""
+
+    DEFAULT_CSS = """
+    DirectoryHeader {
+        height: 3;
+        padding: 0 1;
+        background: #0d1d16;
+        color: #9ae6b4;
+        border-left: thick #38a169;
+        border-bottom: solid #25312b;
+        content-align-vertical: middle;
+    }
+    """
+
+
 class DirectoryList(Widget):
     """Leftmost sidebar: filter conversations by working directory."""
 
@@ -91,6 +111,10 @@ class DirectoryList(Widget):
         min-width: 24;
         max-width: 40;
         height: 1fr;
+        background: #111614;
+    }
+    DirectoryList #directory-header {
+        dock: top;
     }
     DirectoryList #directory-list {
         height: 1fr;
@@ -100,9 +124,9 @@ class DirectoryList(Widget):
     """
 
     BINDINGS = [
-        Binding("up,k", "cursor_up", "Up", show=False),
-        Binding("down,j", "cursor_down", "Down", show=False),
-        Binding("right,l", "focus_chat_list", "Focus Chats", show=False),
+        Binding("up,k", "cursor_up", "Up", show=True),
+        Binding("down,j", "cursor_down", "Down", show=True),
+        Binding("right,l", "focus_chat_list", "Chats", show=True),
         Binding("enter", "select_directory", "Select Directory", show=False),
     ]
 
@@ -121,7 +145,18 @@ class DirectoryList(Widget):
         self.entries = self._build_entries(conversations)
         self.active_directory: DirectoryFilter = None
 
+    def _header_text(self) -> str:
+        """Return the current directory header text."""
+        total = self.entries[0].count if self.entries else 0
+        chat_label = "chat" if total == 1 else "chats"
+        return f"DIRECTORIES\n{total} {chat_label}"
+
     def compose(self) -> ComposeResult:
+        yield DirectoryHeader(
+            self._header_text(),
+            id="directory-header",
+            markup=False,
+        )
         yield HiddenScrollVertical(id="directory-list")
 
     def on_mount(self) -> None:
@@ -246,6 +281,9 @@ class DirectoryList(Widget):
         if self.active_directory not in available:
             self.active_directory = None
         self.selected_index = self._active_index()
+        self.query_one("#directory-header", DirectoryHeader).update(
+            self._header_text()
+        )
         self._rebuild_list()
         self._highlight_selected()
         return self.active_directory

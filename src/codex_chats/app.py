@@ -7,7 +7,7 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
-from textual.widgets import Footer
+from textual.widgets import Footer, Input
 
 from .models import Conversation
 from .scanner import delete_session_data, scan_conversations
@@ -158,6 +158,54 @@ class CodexChatsApp(App):
             viewer.focus()
         except Exception:
             pass
+
+    def _focused_pane_index(self) -> int:
+        """Return the current pane index: directories, conversations, transcript."""
+        focused = self.focused
+        panes = [
+            self.query_one("#directory-panel", DirectoryList),
+            self.query_one("#left-panel", ChatList),
+            self.query_one("#right-panel", ChatViewer),
+        ]
+
+        for index, pane in enumerate(panes):
+            if focused is pane or (focused and pane in focused.ancestors_with_self):
+                return index
+        return 1
+
+    def on_key(self, event) -> None:
+        """Fallback pane navigation for h/l and left/right keys."""
+        if isinstance(self.focused, Input):
+            return
+
+        if event.key in ("h", "left"):
+            event.stop()
+            self.action_focus_previous_pane()
+        elif event.key in ("l", "right"):
+            event.stop()
+            self.action_focus_next_pane()
+
+    def action_focus_previous_pane(self) -> None:
+        """Move focus one pane to the left."""
+        if isinstance(self.focused, Input):
+            return
+
+        pane_index = self._focused_pane_index()
+        if pane_index == 2:
+            self.action_focus_list()
+        else:
+            self.action_focus_directory_panel()
+
+    def action_focus_next_pane(self) -> None:
+        """Move focus one pane to the right."""
+        if isinstance(self.focused, Input):
+            return
+
+        pane_index = self._focused_pane_index()
+        if pane_index == 0:
+            self.action_focus_list()
+        else:
+            self.action_focus_right_panel()
 
     def action_copy_id(self) -> None:
         """Copy the selected conversation's ID to clipboard."""
