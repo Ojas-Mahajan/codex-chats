@@ -7,7 +7,6 @@ from typing import Optional
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
 from textual.message import Message as TextualMessage
 from textual.reactive import reactive
 from textual.widget import Widget
@@ -15,6 +14,7 @@ from textual.widgets import Input, Static
 
 from ..models import Conversation
 from .directory_list import DirectoryFilter, normalize_directory
+from .hidden_scroll import HiddenScrollVertical
 
 
 class ConversationItem(Static):
@@ -24,21 +24,28 @@ class ConversationItem(Static):
     ConversationItem {
         height: 3;
         padding: 0 1;
-        border-bottom: solid #333333;
+        background: #171717;
+        border-bottom: solid #2f3336;
         content-align-vertical: middle;
     }
     ConversationItem:hover {
-        background: $surface-lighten-1;
+        background: #232629;
     }
     ConversationItem.--selected {
-        background: $surface-lighten-1;
-        border-left: thick #555555;
+        background: #30343a;
+        border-left: thick #c9d1d9;
     }
     ConversationItem .title-text {
-        color: $text;
+        color: #d7dde5;
+    }
+    ConversationItem.--selected .title-text {
+        color: #f2f5f8;
     }
     ConversationItem .meta-text {
-        color: $text-disabled;
+        color: #8b949e;
+    }
+    ConversationItem.--selected .meta-text {
+        color: #c9d1d9;
     }
     """
 
@@ -81,26 +88,26 @@ class DateSeparator(Static):
         height: 3;
         padding: 0 1;
         content-align: left middle;
-        background: $surface-lighten-1;
-        color: $text-muted;
+        background: #202124;
+        color: #aeb6c2;
         text-style: bold;
-        border-left: solid #333333;
-        border-bottom: solid #333333;
+        border-left: solid #3f454c;
+        border-bottom: solid #30363d;
     }
     DateSeparator.today {
-        background: #0d1d2e;
-        color: #8fc5ff;
-        border-left: thick #2f8cff;
+        background: #16212d;
+        color: #9cc7f1;
+        border-left: thick #6f9fcf;
     }
     DateSeparator.yesterday {
-        background: #261f12;
-        color: #e7c16d;
-        border-left: thick #b8842a;
+        background: #242016;
+        color: #dbc37b;
+        border-left: thick #a98b45;
     }
     DateSeparator.older {
-        background: #10231f;
-        color: #82cdbc;
-        border-left: thick #2f8f7b;
+        background: #14231f;
+        color: #8bc9bb;
+        border-left: thick #4e9a88;
     }
     """
 
@@ -135,29 +142,23 @@ class ChatList(Widget):
     ChatList {
         width: 1fr;
         height: 1fr;
+        background: #171717;
     }
     ChatList #search-input {
         dock: top;
         margin: 0 0 0 0;
-        color: $text;
-        background: #071521;
-        border: solid #1e3a5f;
+        color: #d7dde5;
+        background: #121416;
+        border: solid #3f454c;
     }
     ChatList #search-input:focus {
-        border: solid #2f8cff;
-        background: #0a1c2d;
+        border: solid #6f8193;
+        background: #161b20;
     }
     ChatList #conversation-list {
         height: 1fr;
         overflow-y: auto;
-        scrollbar-size-horizontal: 0;
-        scrollbar-size-vertical: 1;
-        scrollbar-background: #151515;
-        scrollbar-background-hover: #151515;
-        scrollbar-background-active: #151515;
-        scrollbar-color: #cfd6e3;
-        scrollbar-color-hover: #eef2f8;
-        scrollbar-color-active: #ffffff;
+        scrollbar-size: 0 0;
     }
     """
 
@@ -212,7 +213,7 @@ class ChatList(Widget):
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="🔍 Search conversations…", id="search-input")
-        yield Vertical(id="conversation-list")
+        yield HiddenScrollVertical(id="conversation-list")
 
     def on_mount(self) -> None:
         """Populate the list on mount."""
@@ -281,7 +282,7 @@ class ChatList(Widget):
 
     def _rebuild_list(self) -> None:
         """Rebuild the conversation list widgets."""
-        container = self.query_one("#conversation-list", Vertical)
+        container = self.query_one("#conversation-list", HiddenScrollVertical)
         container.remove_children()
 
         last_group = None
@@ -295,7 +296,7 @@ class ChatList(Widget):
 
     def _highlight_selected(self) -> None:
         """Update the visual highlight for the selected conversation."""
-        container = self.query_one("#conversation-list", Vertical)
+        container = self.query_one("#conversation-list", HiddenScrollVertical)
         items = list(container.query(ConversationItem))
         for i, item in enumerate(items):
             if i == self.selected_index:
@@ -340,7 +341,7 @@ class ChatList(Widget):
 
     def on_click(self, event) -> None:
         """Handle click on a conversation item."""
-        container = self.query_one("#conversation-list", Vertical)
+        container = self.query_one("#conversation-list", HiddenScrollVertical)
         items = list(container.query(ConversationItem))
         for i, item in enumerate(items):
             if item is event.widget or item in event.widget.ancestors_with_self:

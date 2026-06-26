@@ -9,8 +9,10 @@ Terminal UI for browsing, searching, opening, and cleaning up local Codex CLI co
 - **Fast metadata search**: Filter conversations by title, session ID, model, or working directory.
 - **Directory filtering**: Use the left sidebar to show all chats or only chats from a specific project directory.
 - **Conversation list grouping**: Chats are sorted newest first and grouped into Today, Yesterday, and Older sections.
+- **Yazi-inspired terminal styling**: Dark pane colors, clear divider lines, readable selected rows, and hidden scrollbars keep the UI clean while preserving keyboard and mouse scrolling.
 - **Lazy transcript loading**: Startup and search only load lightweight metadata. Full rollout transcripts are parsed when a conversation is selected.
-- **Transcript viewer**: Read user, assistant, reasoning, tool-call, and tool-output entries in a formatted right-hand pane.
+- **Transcript viewer**: Read user, assistant, reasoning, tool-call, and tool-output entries in a formatted right-hand `Transcript` pane.
+- **Compact image attachments**: Pasted image tags are shown as short attachment labels instead of large raw XML/path blocks.
 - **Resume in Codex**: Press `Enter` or `o` to suspend the TUI and run `codex resume <session-id>` from the saved working directory when it still exists.
 - **Delete sessions**: Remove a session's rollout file and matching `history.jsonl` rows after confirmation.
 - **Clipboard support**: Copy the selected session ID with `c`.
@@ -22,8 +24,11 @@ Terminal UI for browsing, searching, opening, and cleaning up local Codex CLI co
 - Python 3.10+
 - Codex CLI installed and available as `codex`
 - A Codex data directory containing `history.jsonl`, usually `~/.codex`
+- Python dependencies from `pyproject.toml`, including [Textual](https://textual.textualize.io/), Rich, and Click
 
 ## Installation
+
+Create a local virtual environment and install the app in editable mode:
 
 ```bash
 cd /path/to/codex-chats
@@ -32,12 +37,16 @@ source .venv/bin/activate
 pip install -e .
 ```
 
+Textual is the terminal UI framework used by `codex-chats`. It provides the app shell, panes, input widgets, keyboard bindings, scrollable containers, borders, and color styling used throughout the interface.
+
 The repository also includes a wrapper script named `codex-chats`. To run it from anywhere, make it executable and symlink it into a directory on your `PATH`:
 
 ```bash
 chmod +x codex-chats
 ln -s "$(pwd)/codex-chats" ~/.local/bin/codex-chats
 ```
+
+The wrapper script expects the local `.venv` directory to exist at the project root. If you install the package globally or with a tool such as `pipx`, the `.venv` folder is not required, but this repository's wrapper script will not work unless `.venv` has been created and `pip install -e .` has been run inside it.
 
 ## Usage
 

@@ -25,7 +25,7 @@ class CodexChatsApp(App):
 
     CSS = """
     Screen {
-        background: $surface;
+        background: #171717;
     }
 
     * {
@@ -38,24 +38,26 @@ class CodexChatsApp(App):
     }
 
     #directory-panel {
-        border-right: solid #242424;
+        border-right: solid #5b626b;
     }
 
     #left-panel {
         width: 38;
         min-width: 30;
         max-width: 55;
-        border-right: solid #242424;
+        border-right: solid #5b626b;
         height: 1fr;
     }
 
     #right-panel {
         width: 1fr;
         height: 1fr;
+        background: #171717;
     }
 
     Footer {
-        background: $surface-lighten-1;
+        background: #202124;
+        color: #d7dde5;
     }
     """
 

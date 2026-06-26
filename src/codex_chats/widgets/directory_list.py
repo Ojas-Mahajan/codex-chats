@@ -43,28 +43,31 @@ class DirectoryItem(Static):
     DirectoryItem {
         height: 3;
         padding: 0 1;
-        background: #111614;
-        border-bottom: solid #25312b;
+        background: #101412;
+        border-bottom: solid #2d3430;
         content-align-vertical: middle;
     }
     DirectoryItem:hover {
-        background: #14211b;
+        background: #18221d;
     }
     DirectoryItem.--selected {
-        background: #172a21;
-        border-left: thick #38a169;
+        background: #173224;
+        border-left: thick #63b37a;
     }
     DirectoryItem.--active {
         text-style: bold;
     }
     DirectoryItem.--active .directory-label {
-        color: #9ae6b4;
+        color: #b3f0c6;
     }
     DirectoryItem .directory-label {
-        color: $text;
+        color: #d7dde5;
     }
     DirectoryItem .directory-detail {
-        color: $text-disabled;
+        color: #838b91;
+    }
+    DirectoryItem.--selected .directory-detail {
+        color: #a9b4ad;
     }
     """
 
@@ -95,10 +98,10 @@ class DirectoryHeader(Static):
     DirectoryHeader {
         height: 3;
         padding: 0 1;
-        background: #0d1d16;
-        color: #9ae6b4;
-        border-left: thick #38a169;
-        border-bottom: solid #25312b;
+        background: #10251a;
+        color: #b3f0c6;
+        border-left: thick #63b37a;
+        border-bottom: solid #37423b;
         content-align-vertical: middle;
     }
     """
@@ -115,7 +118,7 @@ class DirectoryList(Widget):
         min-width: 24;
         max-width: 40;
         height: 1fr;
-        background: #111614;
+        background: #101412;
     }
     DirectoryList #directory-header {
         dock: top;

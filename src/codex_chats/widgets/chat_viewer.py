@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from textual.app import ComposeResult
@@ -13,6 +14,16 @@ from textual.widgets import Static
 from ..models import Conversation, Message
 from ..parser import parse_session_file
 from .hidden_scroll import HiddenVerticalScroll
+
+
+IMAGE_TAG_RE = re.compile(
+    r"<image\b(?P<attrs>[^>]*)>.*?</image>",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+IMAGE_NAME_RE = re.compile(
+    r'name=(?:\[([^\]]+)\]|"([^"]+)"|([^\s>]+))',
+    flags=re.IGNORECASE,
+)
 
 
 def _format_timestamp(msg: Message) -> str:
@@ -41,31 +52,46 @@ def _format_tool_calls(msg: Message) -> str:
     return "\n".join(lines)
 
 
+def _compact_attachments(content: str) -> str:
+    """Replace verbose attachment tags with compact reader-friendly labels."""
+
+    def replace_image(match: re.Match[str]) -> str:
+        attrs = match.group("attrs")
+        name_match = IMAGE_NAME_RE.search(attrs)
+        label = "image"
+        if name_match:
+            label = next(group for group in name_match.groups() if group)
+        return f"[Image attachment: {label}]"
+
+    content = IMAGE_TAG_RE.sub(replace_image, content)
+    content = re.sub(r"\n{3,}", "\n\n", content)
+    return content.strip()
+
+
 class MessageBlock(Static):
     """A single message rendered as a styled block."""
 
     DEFAULT_CSS = """
     MessageBlock {
         margin: 0;
-        padding: 0 1;
-        border-left: thick transparent;
+        padding: 1 2;
+        border-bottom: solid #30363d;
         height: auto;
+        color: #d7dde5;
     }
     MessageBlock.user-message {
-        border-left: thick #555555;
-        background: $surface-lighten-1;
+        background: #202124;
     }
     MessageBlock.assistant-message {
-        border-left: thick #444444;
-        background: $surface;
+        background: #171717;
     }
     MessageBlock.thinking-message {
-        border-left: thick #333333;
-        background: $surface;
+        background: #15191d;
+        color: #aeb6c2;
     }
     MessageBlock.tool-message {
-        border-left: thick #333333;
-        background: $surface;
+        background: #141619;
+        color: #9aa4af;
     }
     """
 
@@ -98,9 +124,12 @@ class MessageBlock(Static):
             lines.append(f"   {ts}")
 
         if msg.content:
-            content = msg.content
+            content = _compact_attachments(msg.content)
             if len(content) > 3000:
-                content = content[:3000] + "\n\n...content truncated for display..."
+                content = (
+                    content[:3000]
+                    + "\n\n[Content truncated for display]"
+                )
             lines.extend(["", content])
 
         if msg.tool_calls:
@@ -118,7 +147,8 @@ class EmptyState(Static):
         width: 1fr;
         height: 1fr;
         content-align: center middle;
-        color: $text-muted;
+        background: #171717;
+        color: #8b949e;
         text-style: italic;
     }
     """
@@ -129,27 +159,32 @@ class ConversationHeader(Static):
 
     DEFAULT_CSS = """
     ConversationHeader {
-        height: 4;
+        height: 5;
         padding: 0 1;
-        background: $surface-lighten-1;
-        border-bottom: solid #333333;
+        background: #202124;
+        border-bottom: solid #5b626b;
     }
     ConversationHeader #header-content {
         width: 1fr;
-        height: 4;
+        height: 5;
+    }
+    ConversationHeader .viewer-label {
+        height: 1;
+        text-style: bold;
+        color: #f2f5f8;
     }
     ConversationHeader .conv-title {
         height: 1;
         text-style: bold;
-        color: $text;
+        color: #d7dde5;
     }
     ConversationHeader .conv-id {
         height: 1;
-        color: $text-muted;
+        color: #aeb6c2;
     }
     ConversationHeader .conv-meta {
         height: 2;
-        color: $text-disabled;
+        color: #8b949e;
         margin-top: 0;
     }
     """
@@ -172,6 +207,7 @@ class ConversationHeader(Static):
             meta_parts.append(f"Messages: {conv.message_count}")
 
         with Vertical(id="header-content"):
+            yield Static("Transcript", classes="viewer-label", markup=False)
             yield Static(f"📋  {conv.title}", classes="conv-title", markup=False)
             yield Static(f"ID: {conv.id}", classes="conv-id", markup=False)
             yield Static(
@@ -200,9 +236,10 @@ class ChatViewer(Widget):
     ChatViewer {
         width: 1fr;
         height: 1fr;
+        background: #171717;
     }
     ChatViewer #viewer-header {
-        height: 4;
+        height: 5;
     }
     ChatViewer #viewer-scroll {
         height: 1fr;
