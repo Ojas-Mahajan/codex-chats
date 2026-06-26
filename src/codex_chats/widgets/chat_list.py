@@ -7,6 +7,7 @@ from typing import Optional
 
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.containers import Vertical
 from textual.message import Message as TextualMessage
 from textual.reactive import reactive
 from textual.widget import Widget
@@ -14,7 +15,6 @@ from textual.widgets import Input, Static
 
 from ..models import Conversation
 from .directory_list import DirectoryFilter, normalize_directory
-from .hidden_scroll import HiddenScrollVertical
 
 
 class ConversationItem(Static):
@@ -150,7 +150,14 @@ class ChatList(Widget):
     ChatList #conversation-list {
         height: 1fr;
         overflow-y: auto;
-        scrollbar-size: 0 0;
+        scrollbar-size-horizontal: 0;
+        scrollbar-size-vertical: 1;
+        scrollbar-background: #151515;
+        scrollbar-background-hover: #151515;
+        scrollbar-background-active: #151515;
+        scrollbar-color: #cfd6e3;
+        scrollbar-color-hover: #eef2f8;
+        scrollbar-color-active: #ffffff;
     }
     """
 
@@ -205,7 +212,7 @@ class ChatList(Widget):
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="🔍 Search conversations…", id="search-input")
-        yield HiddenScrollVertical(id="conversation-list")
+        yield Vertical(id="conversation-list")
 
     def on_mount(self) -> None:
         """Populate the list on mount."""
@@ -274,7 +281,7 @@ class ChatList(Widget):
 
     def _rebuild_list(self) -> None:
         """Rebuild the conversation list widgets."""
-        container = self.query_one("#conversation-list", HiddenScrollVertical)
+        container = self.query_one("#conversation-list", Vertical)
         container.remove_children()
 
         last_group = None
@@ -288,7 +295,7 @@ class ChatList(Widget):
 
     def _highlight_selected(self) -> None:
         """Update the visual highlight for the selected conversation."""
-        container = self.query_one("#conversation-list", HiddenScrollVertical)
+        container = self.query_one("#conversation-list", Vertical)
         items = list(container.query(ConversationItem))
         for i, item in enumerate(items):
             if i == self.selected_index:
@@ -333,7 +340,7 @@ class ChatList(Widget):
 
     def on_click(self, event) -> None:
         """Handle click on a conversation item."""
-        container = self.query_one("#conversation-list", HiddenScrollVertical)
+        container = self.query_one("#conversation-list", Vertical)
         items = list(container.query(ConversationItem))
         for i, item in enumerate(items):
             if item is event.widget or item in event.widget.ancestors_with_self:
