@@ -7,10 +7,11 @@ from typing import Optional
 
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.containers import Horizontal
 from textual.message import Message as TextualMessage
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import Input, Static
+from textual.widgets import Input, Select, Static
 
 from ..models import Conversation
 from .directory_list import DirectoryFilter, normalize_directory
@@ -138,6 +139,14 @@ class ChatList(Widget):
 
     can_focus = True
 
+    DATE_FILTER_OPTIONS = [
+        ("All dates", "all"),
+        ("Today", "today"),
+        ("Yesterday", "yesterday"),
+        ("Last 7 days", "last_7"),
+        ("Last 30 days", "last_30"),
+    ]
+
     DEFAULT_CSS = """
     ChatList {
         width: 1fr;
@@ -155,6 +164,22 @@ class ChatList(Widget):
         border: solid #6f8193;
         background: #161b20;
     }
+    ChatList #filter-row {
+        dock: top;
+        height: 3;
+        background: #171717;
+    }
+    ChatList Select {
+        width: 1fr;
+        height: 3;
+        color: #d7dde5;
+        background: #121416;
+        border: solid #3f454c;
+    }
+    ChatList Select:focus {
+        border: solid #6f8193;
+        background: #161b20;
+    }
     ChatList #conversation-list {
         height: 1fr;
         overflow-y: auto;
@@ -165,13 +190,13 @@ class ChatList(Widget):
     BINDINGS = [
         Binding("up,k", "cursor_up", "Up", show=True),
         Binding("down,j", "cursor_down", "Down", show=True),
-        Binding("left,h", "focus_directory", "Directories", show=True),
-        Binding("right,l", "focus_right", "Transcript", show=True),
         Binding("enter,o", "open_session", "Open Session", show=False),
     ]
 
     selected_index: reactive[int] = reactive(0, init=False)
     search_query: reactive[str] = reactive("", init=False)
+    date_filter: reactive[str] = reactive("all", init=False)
+    model_filter: reactive[str] = reactive("all", init=False)
 
     class ConversationSelected(TextualMessage):
         """Posted when a conversation is selected."""
@@ -211,8 +236,28 @@ class ChatList(Widget):
             index[conversation.id] = "\n".join(parts).lower()
         return index
 
+    def _model_options(self) -> list[tuple[str, str]]:
+        """Build selectable model filter options from the current conversations."""
+        models = sorted({c.model for c in self.all_conversations if c.model})
+        return [("All models", "all"), *[(model, model) for model in models]]
+
     def compose(self) -> ComposeResult:
         yield Input(placeholder="🔍 Search conversations…", id="search-input")
+        with Horizontal(id="filter-row"):
+            yield Select(
+                self.DATE_FILTER_OPTIONS,
+                value=self.date_filter,
+                allow_blank=False,
+                compact=True,
+                id="date-filter",
+            )
+            yield Select(
+                self._model_options(),
+                value=self.model_filter,
+                allow_blank=False,
+                compact=True,
+                id="model-filter",
+            )
         yield HiddenScrollVertical(id="conversation-list")
 
     def on_mount(self) -> None:
@@ -230,6 +275,43 @@ class ChatList(Widget):
         self.search_query = event.value.lower().strip()
         self._apply_filter()
 
+    def on_select_changed(self, event: Select.Changed) -> None:
+        """Apply date and model filters when either select changes."""
+        if event.select.id == "date-filter":
+            self.date_filter = str(event.value)
+        elif event.select.id == "model-filter":
+            self.model_filter = str(event.value)
+        else:
+            return
+        self._apply_filter()
+
+    def _matches_date_filter(self, conversation: Conversation) -> bool:
+        """Return whether a conversation matches the selected date filter."""
+        if self.date_filter == "all":
+            return True
+
+        local_now = datetime.now(timezone.utc).astimezone().date()
+        local_dt = (
+            conversation.last_modified.astimezone().date()
+            if conversation.last_modified.tzinfo
+            else conversation.last_modified.date()
+        )
+        delta = (local_now - local_dt).days
+
+        if self.date_filter == "today":
+            return delta <= 0
+        if self.date_filter == "yesterday":
+            return delta == 1
+        if self.date_filter == "last_7":
+            return delta <= 6
+        if self.date_filter == "last_30":
+            return delta <= 29
+        return True
+
+    def _matches_model_filter(self, conversation: Conversation) -> bool:
+        """Return whether a conversation matches the selected model filter."""
+        return self.model_filter == "all" or conversation.model == self.model_filter
+
     def _apply_filter(
         self, preferred_id: str | None = None, fallback_index: int = 0
     ) -> None:
@@ -240,6 +322,11 @@ class ChatList(Widget):
             for c in self.all_conversations
             if self.directory_filter is None
             or normalize_directory(c.cwd) == self.directory_filter
+        ]
+        conversations = [
+            c
+            for c in conversations
+            if self._matches_date_filter(c) and self._matches_model_filter(c)
         ]
         if not query:
             self._filtered = list(conversations)
@@ -372,6 +459,7 @@ class ChatList(Widget):
         """Replace the backing data and refresh the visible list."""
         self.all_conversations = list(conversations)
         self._search_index = self._build_search_index(self.all_conversations)
+        self._refresh_model_filter_options()
         self._apply_filter(preferred_id=preferred_id, fallback_index=fallback_index)
 
     def set_directory_filter(
@@ -384,3 +472,18 @@ class ChatList(Widget):
         """Set the active directory filter and refresh visible conversations."""
         self.directory_filter = directory
         self._apply_filter(preferred_id=preferred_id, fallback_index=fallback_index)
+
+    def _refresh_model_filter_options(self) -> None:
+        """Refresh model select options after the backing conversations change."""
+        options = self._model_options()
+        available_values = {value for _, value in options}
+        if self.model_filter not in available_values:
+            self.model_filter = "all"
+
+        try:
+            model_select = self.query_one("#model-filter", Select)
+        except Exception:
+            return
+
+        model_select.set_options(options)
+        model_select.value = self.model_filter

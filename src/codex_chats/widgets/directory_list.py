@@ -133,7 +133,6 @@ class DirectoryList(Widget):
     BINDINGS = [
         Binding("up,k", "cursor_up", "Up", show=True),
         Binding("down,j", "cursor_down", "Down", show=True),
-        Binding("right,l", "focus_chat_list", "Chats", show=True),
         Binding("enter", "select_directory", "Select Directory", show=False),
     ]
 

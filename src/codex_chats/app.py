@@ -7,7 +7,7 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
-from textual.widgets import Footer, Input
+from textual.widgets import Footer, Input, Select
 
 from .models import Conversation
 from .scanner import delete_session_data, scan_conversations
@@ -161,9 +161,12 @@ class CodexChatsApp(App):
         except Exception:
             pass
 
-    def _focused_pane_index(self) -> int:
-        """Return the current pane index: directories, conversations, transcript."""
+    def _focused_pane_index(self) -> int | None:
+        """Return the focused main pane index, if focus is inside one."""
         focused = self.focused
+        if focused is None:
+            return None
+
         panes = [
             self.query_one("#directory-panel", DirectoryList),
             self.query_one("#left-panel", ChatList),
@@ -173,37 +176,47 @@ class CodexChatsApp(App):
         for index, pane in enumerate(panes):
             if focused is pane or (focused and pane in focused.ancestors_with_self):
                 return index
-        return 1
+        return None
 
     def on_key(self, event) -> None:
-        """Fallback pane navigation for h/l and left/right keys."""
-        if isinstance(self.focused, Input):
+        """Navigate main panes with h/l and left/right keys."""
+        if isinstance(self.focused, (Input, Select)):
+            return
+
+        pane_index = self._focused_pane_index()
+        if pane_index is None:
             return
 
         if event.key in ("h", "left"):
             event.stop()
-            self.action_focus_previous_pane()
+            self.action_focus_previous_pane(pane_index)
         elif event.key in ("l", "right"):
             event.stop()
-            self.action_focus_next_pane()
+            self.action_focus_next_pane(pane_index)
 
-    def action_focus_previous_pane(self) -> None:
+    def action_focus_previous_pane(self, pane_index: int | None = None) -> None:
         """Move focus one pane to the left."""
-        if isinstance(self.focused, Input):
+        if isinstance(self.focused, (Input, Select)):
             return
 
-        pane_index = self._focused_pane_index()
+        pane_index = self._focused_pane_index() if pane_index is None else pane_index
+        if pane_index is None:
+            return
+
         if pane_index == 2:
             self.action_focus_list()
         else:
             self.action_focus_directory_panel()
 
-    def action_focus_next_pane(self) -> None:
+    def action_focus_next_pane(self, pane_index: int | None = None) -> None:
         """Move focus one pane to the right."""
-        if isinstance(self.focused, Input):
+        if isinstance(self.focused, (Input, Select)):
             return
 
-        pane_index = self._focused_pane_index()
+        pane_index = self._focused_pane_index() if pane_index is None else pane_index
+        if pane_index is None:
+            return
+
         if pane_index == 0:
             self.action_focus_list()
         else:

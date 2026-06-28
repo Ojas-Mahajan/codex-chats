@@ -7,6 +7,7 @@ Terminal UI for browsing, searching, opening, and cleaning up local Codex CLI co
 ## Features
 
 - **Fast metadata search**: Filter conversations by title, session ID, model, or working directory.
+- **Date and model filters**: Narrow the list to Today, Yesterday, Last 7 days, Last 30 days, or a specific model such as `gpt-5.5`.
 - **Directory filtering**: Use the left sidebar to show all chats or only chats from a specific project directory.
 - **Conversation list grouping**: Chats are sorted newest first and grouped into Today, Yesterday, and Older sections.
 - **Yazi-inspired terminal styling**: Dark pane colors, clear divider lines, readable selected rows, and hidden scrollbars keep the UI clean while preserving keyboard and mouse scrolling.
@@ -64,6 +65,7 @@ codex-chats --data-dir /path/to/.codex
 
 - `Up` / `Down` or `j` / `k`: Move through the focused directory list, conversation list, or transcript.
 - `/`: Focus the search box.
+- `Tab` / `Shift+Tab`: Move between the search box, date filter, model filter, and pane controls.
 - `Escape`: Return focus to the conversation list.
 - `Left` or `h`: Move focus from conversations to directories, or from transcript back to conversations.
 - `Right` or `l`: Move focus from directories to conversations, or from conversations to transcript.
@@ -83,7 +85,7 @@ codex-chats --data-dir /path/to/.codex
 
 Codex stores a lightweight command history in `~/.codex/history.jsonl` and full session transcripts under `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
 
-`codex-chats` uses `history.jsonl` as the primary index, scans rollout filenames once to connect session IDs to transcript files, and reads only session metadata such as model and working directory during startup. This keeps the conversation list and search responsive even when transcript files are large.
+`codex-chats` uses `history.jsonl` as the primary index, scans rollout filenames once to connect session IDs to transcript files, and reads only session metadata such as model and working directory during startup. Search, directory filters, date filters, and model filters all run against this in-memory metadata, which keeps the conversation list responsive even when transcript files are large.
 
 When you select a conversation, the app parses that one rollout file and renders the transcript. Parsed messages are cached on the selected conversation object for the rest of the app session.
 

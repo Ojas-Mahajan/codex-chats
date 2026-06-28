@@ -223,7 +223,6 @@ class ChatViewer(Widget):
     can_focus = True
 
     BINDINGS = [
-        Binding("left,h", "focus_left", "Chats", show=True),
         Binding("up,k", "scroll_up", "Scroll Up", show=True),
         Binding("down,j", "scroll_down", "Scroll Down", show=True),
         Binding("pageup", "page_up", "Page Up", show=False),
