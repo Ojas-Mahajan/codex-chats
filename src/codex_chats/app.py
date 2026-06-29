@@ -98,7 +98,7 @@ class CodexChatsApp(App):
         self._selected_conversation = event.conversation
         viewer = self.query_one("#right-panel", ChatViewer)
         if event.conversation:
-            viewer.show_conversation(event.conversation)
+            viewer.show_conversation(event.conversation, event.activity_date)
         else:
             viewer.show_empty()
 

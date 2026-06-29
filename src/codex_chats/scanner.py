@@ -23,7 +23,7 @@ class DeleteSessionResult:
 def _parse_history(history_path: Path) -> dict[str, dict]:
     """Parse history.jsonl to build session index.
 
-    Returns a dict mapping session_id -> {first_msg, last_ts, msg_count}.
+    Returns a dict mapping session_id -> metadata gathered from history rows.
     """
     sessions: dict[str, dict] = {}
 
@@ -48,10 +48,16 @@ def _parse_history(history_path: Path) -> dict[str, dict]:
                 if sid not in sessions:
                     sessions[sid] = {
                         "first_msg": text,
+                        "first_ts": ts,
                         "last_ts": ts,
                         "msg_count": 0,
+                        "activity_ts": set(),
                     }
                 sessions[sid]["msg_count"] += 1
+                sessions[sid]["activity_ts"].add(ts)
+                if ts < sessions[sid]["first_ts"]:
+                    sessions[sid]["first_ts"] = ts
+                    sessions[sid]["first_msg"] = text
                 # Track the latest timestamp
                 if ts > sessions[sid]["last_ts"]:
                     sessions[sid]["last_ts"] = ts
@@ -138,13 +144,24 @@ def scan_conversations(base_dir: str | Path) -> list[Conversation]:
 
     for sid, info in session_index.items():
         first_msg = info["first_msg"]
+        first_ts = info["first_ts"]
         last_ts = info["last_ts"]
         msg_count = info["msg_count"]
+        activity_dates = tuple(
+            sorted(
+                {
+                    datetime.fromtimestamp(ts, tz=timezone.utc).astimezone().date()
+                    for ts in info["activity_ts"]
+                },
+                reverse=True,
+            )
+        )
 
         # Derive title from first user message
         title = extract_title(first_msg)
 
         # Convert timestamp
+        started_at = datetime.fromtimestamp(first_ts, tz=timezone.utc)
         last_modified = datetime.fromtimestamp(last_ts, tz=timezone.utc)
 
         # Find the session rollout file
@@ -158,11 +175,14 @@ def scan_conversations(base_dir: str | Path) -> list[Conversation]:
             meta = parse_session_metadata(session_file)
             model = meta.get("model", "")
             cwd = meta.get("cwd", "")
+            started_at = meta.get("started_at", started_at)
 
         conv = Conversation(
             id=sid,
             title=title,
             last_modified=last_modified,
+            started_at=started_at,
+            activity_dates=activity_dates,
             has_transcript=has_transcript,
             session_file=str(session_file) if session_file else "",
             model=model,

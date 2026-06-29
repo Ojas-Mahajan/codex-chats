@@ -217,6 +217,7 @@ def parse_session_metadata(path: Path) -> dict:
     meta = {}
     have_cwd = False
     have_model = False
+    checked_started_at = False
 
     try:
         lines = path.open("r", encoding="utf-8")
@@ -225,7 +226,7 @@ def parse_session_metadata(path: Path) -> dict:
 
     try:
         for line in lines:
-            if have_cwd and have_model:
+            if have_cwd and have_model and checked_started_at:
                 break
 
             line = line.strip()
@@ -249,6 +250,12 @@ def parse_session_metadata(path: Path) -> dict:
                 if model:
                     meta["model"] = model
                     have_model = True
+                started_at = parse_timestamp(
+                    payload.get("timestamp") or obj.get("timestamp")
+                )
+                if started_at:
+                    meta["started_at"] = started_at
+                checked_started_at = True
                 continue
 
             if entry_type == "turn_context":

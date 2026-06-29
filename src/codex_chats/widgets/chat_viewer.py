@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date, datetime
 from pathlib import Path
 
 from textual.app import ComposeResult
@@ -26,11 +27,17 @@ IMAGE_NAME_RE = re.compile(
 )
 
 
+def _format_datetime(timestamp: datetime | None) -> str:
+    """Format a timestamp for display in the user's local timezone."""
+    if timestamp:
+        local_timestamp = timestamp.astimezone() if timestamp.tzinfo else timestamp
+        return local_timestamp.strftime("%b %d, %Y  %I:%M %p")
+    return ""
+
+
 def _format_timestamp(msg: Message) -> str:
     """Format a message timestamp for display."""
-    if msg.timestamp:
-        return msg.timestamp.strftime("%b %d, %Y  %I:%M %p")
-    return ""
+    return _format_datetime(msg.timestamp)
 
 
 def _format_tool_calls(msg: Message) -> str:
@@ -196,9 +203,11 @@ class ConversationHeader(Static):
     def compose(self) -> ComposeResult:
         conv = self.conversation
 
-        meta_parts = [
-            f"Last active: {conv.last_modified.strftime('%b %d, %Y %I:%M %p')}",
-        ]
+        meta_parts = []
+        started_at = _format_datetime(conv.started_at)
+        if started_at:
+            meta_parts.append(f"Started: {started_at}")
+        meta_parts.append(f"Last active: {_format_datetime(conv.last_modified)}")
         if conv.model:
             meta_parts.append(f"Model: {conv.model}")
         if conv.cwd:
@@ -295,9 +304,27 @@ class ChatViewer(Widget):
         conversation.messages = messages
         conversation.model = conversation.model or meta.get("model", "")
         conversation.cwd = conversation.cwd or meta.get("cwd", "")
+        first_timestamp = next((m.timestamp for m in messages if m.timestamp), None)
+        if first_timestamp:
+            conversation.started_at = first_timestamp
         conversation.transcript_loaded = True
 
-    def show_conversation(self, conversation: Conversation) -> None:
+    def _message_local_date(self, message: Message) -> date | None:
+        """Return the local date for a message timestamp."""
+        if not message.timestamp:
+            return None
+        timestamp = (
+            message.timestamp.astimezone()
+            if message.timestamp.tzinfo
+            else message.timestamp
+        )
+        return timestamp.date()
+
+    def show_conversation(
+        self,
+        conversation: Conversation,
+        focus_date: date | None = None,
+    ) -> None:
         """Display a conversation's full transcript."""
         header = self.query_one("#viewer-header", Vertical)
         scroll = self._viewer_scroll()
@@ -327,16 +354,28 @@ class ChatViewer(Widget):
 
         # Mount message blocks.
         rendered_messages = 0
+        target_block: MessageBlock | None = None
         for msg in conversation.messages:
             if msg.content or msg.tool_calls:
-                scroll.mount(MessageBlock(msg))
+                block = MessageBlock(msg)
+                scroll.mount(block)
                 rendered_messages += 1
+                if focus_date and self._message_local_date(msg) == focus_date:
+                    target_block = block
 
         if rendered_messages == 0:
             scroll.mount(EmptyState("This conversation has no displayable messages."))
 
-        # Scroll to top
-        scroll.scroll_home(animate=False)
+        if target_block:
+            self.call_after_refresh(
+                scroll.scroll_to_widget,
+                target_block,
+                animate=False,
+                top=True,
+            )
+        else:
+            # The list is ordered by last activity, so open on the latest part.
+            self.call_after_refresh(scroll.scroll_end, animate=False)
 
     def show_empty(self) -> None:
         """Show the empty state."""
