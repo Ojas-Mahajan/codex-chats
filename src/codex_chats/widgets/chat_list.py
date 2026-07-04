@@ -8,7 +8,7 @@ from typing import Optional
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual import on
 from textual.message import Message as TextualMessage
 from textual.reactive import reactive
@@ -242,8 +242,13 @@ class ChatList(Widget):
         height: 1fr;
         background: #171717;
     }
-    ChatList #search-input {
+    ChatList #controls {
         dock: top;
+        height: 6;
+        background: #171717;
+    }
+    ChatList #search-input {
+        height: 3;
         margin: 0 0 0 0;
         color: #d7dde5;
         background: #121416;
@@ -254,7 +259,6 @@ class ChatList(Widget):
         background: #161b20;
     }
     ChatList #filter-row {
-        dock: top;
         height: 3;
         background: #171717;
     }
@@ -361,22 +365,23 @@ class ChatList(Widget):
         ]
 
     def compose(self) -> ComposeResult:
-        yield Input(placeholder="🔍 Search conversations…", id="search-input")
-        with Horizontal(id="filter-row"):
-            yield Select(
-                self.DATE_FILTER_OPTIONS,
-                value=self.date_filter,
-                allow_blank=False,
-                compact=True,
-                id="date-filter",
-            )
-            yield NonRepeatingSelect(
-                self._model_options(),
-                value=self.model_filter,
-                allow_blank=False,
-                compact=True,
-                id="model-filter",
-            )
+        with Vertical(id="controls"):
+            yield Input(placeholder="🔍 Search conversations…", id="search-input")
+            with Horizontal(id="filter-row"):
+                yield Select(
+                    self.DATE_FILTER_OPTIONS,
+                    value=self.date_filter,
+                    allow_blank=False,
+                    compact=True,
+                    id="date-filter",
+                )
+                yield NonRepeatingSelect(
+                    self._model_options(),
+                    value=self.model_filter,
+                    allow_blank=False,
+                    compact=True,
+                    id="model-filter",
+                )
         yield HiddenScrollVertical(id="conversation-list")
 
     def on_mount(self) -> None:
