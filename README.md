@@ -66,6 +66,10 @@ codex-chats --data-dir /path/to/.codex
 - `PageUp` / `PageDown`, `Home`, `End`: Navigate the transcript viewer.
 - `q`: Quit.
 
+  
+## Screenshot of Project
+<img width="2868" height="1724" alt="codex-chats working" src="https://github.com/user-attachments/assets/dff51504-9638-40f0-8dfe-e04b2ecc9608" />
+
 ## How It Works
 
 Codex stores a lightweight command history in `~/.codex/history.jsonl` and full session transcripts under `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
