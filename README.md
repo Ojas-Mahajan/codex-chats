@@ -1,4 +1,4 @@
-<img width="2753" height="1556" alt="Screenshot from 2026-07-05 21-37-09" src="https://github.com/user-attachments/assets/bbcf3943-f32f-4abe-ab09-49829cb79a30" /># Codex Chats
+# Codex Chats
 
 Terminal UI for browsing, searching, opening, and cleaning up local Codex CLI conversation history.
 
@@ -77,8 +77,6 @@ When you select a conversation, the app parses that one rollout file and renders
 When you delete a conversation, the app removes the rollout file, prunes empty session directories, rewrites `history.jsonl` without rows for that session, and refreshes the visible list while preserving the current directory/search context where possible.
 
 
-## Screenshot of Project
-<img width="2753" height="1556" alt="Screenshot from 2026-07-05 21-37-09" src="https://github.com/user-attachments/assets/2547db17-6bc4-4d48-a1f3-701f0657a979" />
 
 
 
