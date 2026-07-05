@@ -76,6 +76,11 @@ When you select a conversation, the app parses that one rollout file and renders
 
 When you delete a conversation, the app removes the rollout file, prunes empty session directories, rewrites `history.jsonl` without rows for that session, and refreshes the visible list while preserving the current directory/search context where possible.
 
+
+## Screenshot of Project
+<img width="2753" height="1556" alt="Screenshot from 2026-07-05 21-37-09" src="https://github.com/user-attachments/assets/aa9ea609-e9a3-4440-8cae-327b3d869ef0" />
+
+
 ## License
 
 MIT License
