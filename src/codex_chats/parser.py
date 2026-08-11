@@ -63,6 +63,8 @@ def extract_message_text(content_list: list) -> str:
         item_type = item.get("type", "")
         if item_type in ("input_text", "output_text"):
             text = item.get("text", "")
+            if not isinstance(text, str):
+                continue
             # Skip system/environment context blocks
             if text.startswith("<environment_context>"):
                 continue
@@ -100,9 +102,14 @@ def parse_session_file(path: Path) -> tuple[dict, list[Message]]:
             except json.JSONDecodeError:
                 continue
 
+            if not isinstance(obj, dict):
+                continue
+
             entry_type = obj.get("type", "")
             timestamp = parse_timestamp(obj.get("timestamp"))
             payload = obj.get("payload", {})
+            if not isinstance(payload, dict):
+                continue
 
             if entry_type == "session_meta":
                 meta = payload
@@ -238,8 +245,13 @@ def parse_session_metadata(path: Path) -> dict:
             except json.JSONDecodeError:
                 continue
 
+            if not isinstance(obj, dict):
+                continue
+
             entry_type = obj.get("type", "")
             payload = obj.get("payload", {})
+            if not isinstance(payload, dict):
+                continue
 
             if entry_type == "session_meta":
                 cwd = payload.get("cwd")

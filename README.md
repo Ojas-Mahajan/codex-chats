@@ -89,7 +89,34 @@ Codex stores a lightweight command history in `~/.codex/history.jsonl` and full 
 
 When you select a conversation, the app parses that one rollout file and renders the transcript. Parsed messages are cached on the selected conversation object for the rest of the app session.
 
-When you delete a conversation, the app removes the rollout file, prunes empty session directories, rewrites `history.jsonl` without rows for that session, and refreshes the visible list while preserving the current directory/search context where possible.
+When you delete a conversation, the app stages the rollout file until a private,
+atomic history update succeeds, then removes it and prunes empty session
+directories. History rewrites use owner-only temporary files, preserve rows
+appended during the operation, and refresh the visible list while preserving
+the current directory/search context where possible.
+
+## Executable builds
+
+The GitHub Actions **Build executables** workflow creates a native, standalone
+artifact for each supported platform:
+
+- macOS ARM64
+- macOS Intel
+- Linux x86-64
+- Windows x86-64
+
+Run it manually from the Actions tab or push a `v*` tag. Each artifact contains
+a single `codex-chats` executable (`codex-chats.exe` on Windows). To build for
+the current machine locally, install the build extra and run:
+
+```bash
+pip install ".[build]"
+python scripts/build_executable.py --output artifacts
+```
+
+PyInstaller builds native executables, so macOS and Windows binaries are built
+on their corresponding GitHub-hosted runners rather than cross-compiled from
+another operating system.
 
 
 

@@ -118,16 +118,47 @@ class CodexChatsApp(App):
         """Open the selected conversation in Codex."""
         if self._selected_conversation:
             import subprocess
-            from pathlib import Path
 
-            with self.suspend():
-                cwd = self._selected_conversation.cwd or None
-                if cwd and not Path(cwd).is_dir():
-                    cwd = None
-                subprocess.run(
-                    ["codex", "resume", self._selected_conversation.id],
-                    cwd=cwd,
-                )
+            selected_id = self._selected_conversation.id
+            try:
+                with self.suspend():
+                    cwd = self._selected_conversation.cwd or None
+                    if cwd and not Path(cwd).is_dir():
+                        cwd = None
+                    subprocess.run(
+                        ["codex", "resume", selected_id],
+                        cwd=cwd,
+                    )
+            finally:
+                # Codex can append history and update the rollout while it is
+                # running. Reload from disk so both the list and cached viewer
+                # transcript show the resumed conversation immediately.
+                self._reload_conversations(preferred_id=selected_id)
+
+    def _reload_conversations(
+        self,
+        preferred_id: str | None = None,
+        fallback_index: int | None = None,
+    ) -> None:
+        """Reload disk state while preserving the active list context."""
+        chat_list = self.query_one("#left-panel", ChatList)
+        directory_list = self.query_one("#directory-panel", DirectoryList)
+        fallback_index = (
+            chat_list.selected_index if fallback_index is None else fallback_index
+        )
+
+        self.conversations = scan_conversations(self.data_dir)
+        active_directory = directory_list.replace_conversations(self.conversations)
+        chat_list.replace_conversations(
+            self.conversations,
+            preferred_id=preferred_id,
+            fallback_index=fallback_index,
+        )
+        chat_list.set_directory_filter(
+            active_directory,
+            preferred_id=preferred_id,
+            fallback_index=fallback_index,
+        )
 
     def action_focus_search(self) -> None:
         """Focus the search input."""
@@ -266,19 +297,7 @@ class CodexChatsApp(App):
                     self.action_focus_list()
                     return
 
-                self.conversations = scan_conversations(self.data_dir)
-                directory_list = self.query_one("#directory-panel", DirectoryList)
-                active_directory = directory_list.replace_conversations(
-                    self.conversations
-                )
-                chat_list.replace_conversations(
-                    self.conversations,
-                    fallback_index=fallback_index,
-                )
-                chat_list.set_directory_filter(
-                    active_directory,
-                    fallback_index=fallback_index,
-                )
+                self._reload_conversations(fallback_index=fallback_index)
 
                 details = []
                 if result.deleted_rollout_file:

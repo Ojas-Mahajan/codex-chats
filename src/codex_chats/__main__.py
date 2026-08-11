@@ -7,6 +7,7 @@ from pathlib import Path
 
 import click
 
+from . import __version__
 from .app import CodexChatsApp
 
 # Default Codex data directory
@@ -21,7 +22,7 @@ DEFAULT_DATA_DIR = Path.home() / ".codex"
     show_default=True,
     help="Path to the Codex data directory.",
 )
-@click.version_option(package_name="codex-chats")
+@click.version_option(version=__version__)
 def main(data_dir: Path) -> None:
     """Browse and view your Codex conversation history in the terminal.
 

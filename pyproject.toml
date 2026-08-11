@@ -13,6 +13,10 @@ dependencies = [
     "click>=8.0",
 ]
 
+[project.optional-dependencies]
+build = ["pyinstaller>=6.0"]
+test = ["pytest>=8.0"]
+
 [project.scripts]
 codex-chats = "codex_chats.__main__:main"
 
