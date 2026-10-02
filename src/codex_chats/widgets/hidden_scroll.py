@@ -19,7 +19,8 @@ class HiddenScrollbarMixin:
         return self.is_scrollable and self.styles.overflow_x != "hidden"
 
     def _refresh_scrollbars(self) -> None:
-        super()._refresh_scrollbars()
+        # Don't call the base implementation: it switches scrollbars on when
+        # content overflows and each on/off toggle forces a full layout pass.
         self.show_horizontal_scrollbar = False
         self.show_vertical_scrollbar = False
         if self._horizontal_scrollbar is not None:

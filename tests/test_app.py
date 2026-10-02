@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from codex_chats.app import CodexChatsApp
+from codex_chats.widgets.chat_viewer import ChatViewer
 
 
 def _response(timestamp: str, role: str, content_type: str, text: str) -> str:
@@ -96,7 +97,8 @@ def test_reload_after_resume_replaces_cached_transcript(tmp_path: Path) -> None:
                 )
 
             app._reload_conversations(preferred_id="test-session")
-            await pilot.pause()
+            # The viewer coalesces renders that arrive in quick succession.
+            await pilot.pause(ChatViewer.RENDER_INTERVAL * 2)
 
             assert app._selected_conversation is not None
             assert [message.content for message in app._selected_conversation.messages] == [

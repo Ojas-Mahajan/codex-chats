@@ -6,15 +6,17 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import Optional
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual import on
 from textual.message import Message as TextualMessage
 from textual.reactive import reactive
+from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import Input, Select, Static
-from textual.widgets._select import Option, SelectCurrent, SelectOverlay, Text
+from textual.widgets._select import Option, SelectCurrent, SelectOverlay
 
 from ..models import Conversation
 from .directory_list import DirectoryFilter, normalize_directory
@@ -34,34 +36,38 @@ class ConversationListEntry:
         return self.activity_date.strftime("%b %d")
 
 
-class ConversationItem(Static):
-    """A single conversation entry in the list."""
+class ConversationItem(Widget):
+    """A single conversation entry in the list.
+
+    Rendered as one widget (rather than a container of Statics) and with a
+    fixed-width left border, so moving the selection only repaints rows and
+    never forces a full-screen layout pass.
+    """
+
+    COMPONENT_CLASSES = {"conversation-item--meta"}
 
     DEFAULT_CSS = """
     ConversationItem {
         height: 3;
         padding: 0 1;
         background: #171717;
+        color: #d7dde5;
+        border-left: thick #171717;
         border-bottom: solid #2f3336;
-        content-align-vertical: middle;
     }
     ConversationItem:hover {
         background: #232629;
+        border-left: thick #232629;
     }
     ConversationItem.--selected {
         background: #30343a;
+        color: #f2f5f8;
         border-left: thick #c9d1d9;
     }
-    ConversationItem .title-text {
-        color: #d7dde5;
-    }
-    ConversationItem.--selected .title-text {
-        color: #f2f5f8;
-    }
-    ConversationItem .meta-text {
+    ConversationItem > .conversation-item--meta {
         color: #8b949e;
     }
-    ConversationItem.--selected .meta-text {
+    ConversationItem.--selected > .conversation-item--meta {
         color: #c9d1d9;
     }
     """
@@ -70,8 +76,9 @@ class ConversationItem(Static):
         super().__init__(**kwargs)
         self.entry = entry
         self.conversation = entry.conversation
+        self._title_line, self._meta_line = self._build_lines()
 
-    def compose(self) -> ComposeResult:
+    def _build_lines(self) -> tuple[str, str]:
         conv = self.conversation
         indicator = "●" if conv.has_transcript else "○"
 
@@ -94,10 +101,17 @@ class ConversationItem(Static):
             cwd_short = conv.cwd.rstrip("/").rsplit("/", 1)[-1]
             meta_parts.append(cwd_short)
         line2 = f"   {'  •  '.join(meta_parts)}" if meta_parts else ""
+        return line1, line2
 
-        yield Static(line1, classes="title-text", markup=False)
-        if line2:
-            yield Static(line2, classes="meta-text", markup=False)
+    def render(self) -> Text:
+        text = Text(self._title_line, no_wrap=True, overflow="ellipsis")
+        if self._meta_line:
+            text.append("\n")
+            text.append(
+                self._meta_line,
+                style=self.get_component_rich_style("conversation-item--meta"),
+            )
+        return text
 
 
 class DateSeparator(Static):
@@ -286,6 +300,9 @@ class ChatList(Widget):
         Binding("enter,o", "open_session", "Open Session", show=False),
     ]
 
+    # Pause in typing before the search filter is applied.
+    SEARCH_DELAY = 0.15
+
     selected_index: reactive[int] = reactive(0, init=False)
     search_query: reactive[str] = reactive("", init=False)
     date_filter: reactive[str] = reactive("all", init=False)
@@ -318,6 +335,9 @@ class ChatList(Widget):
         self._filtered: list[ConversationListEntry] = self._build_entries(conversations)
         self._search_index = self._build_search_index(conversations)
         self.directory_filter: DirectoryFilter = None
+        self._items: list[ConversationItem] = []
+        self._highlighted_item: ConversationItem | None = None
+        self._search_timer: Timer | None = None
 
     def _activity_dates(self, conversation: Conversation) -> tuple[date, ...]:
         """Return local activity dates for a conversation."""
@@ -398,8 +418,15 @@ class ChatList(Widget):
             self.post_message(self.ConversationSelected(None))
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        """Filter conversations when the search input changes."""
+        """Filter conversations once typing in the search input pauses."""
         self.search_query = event.value.lower().strip()
+        # Rebuilding the list is expensive, so don't do it on every keystroke.
+        if self._search_timer is not None:
+            self._search_timer.stop()
+        self._search_timer = self.set_timer(self.SEARCH_DELAY, self._run_search)
+
+    def _run_search(self) -> None:
+        self._search_timer = None
         self._apply_filter()
 
     def on_select_changed(self, event: Select.Changed) -> None:
@@ -502,26 +529,34 @@ class ChatList(Widget):
         container = self.query_one("#conversation-list", HiddenScrollVertical)
         container.remove_children()
 
+        self._items = []
+        widgets: list[Widget] = []
         last_group = None
         for entry in self._filtered:
             group = get_date_group_for_date(entry.activity_date)
             if group != last_group:
-                container.mount(DateSeparator(group))
+                widgets.append(DateSeparator(group))
                 last_group = group
 
-            container.mount(ConversationItem(entry))
+            item = ConversationItem(entry)
+            self._items.append(item)
+            widgets.append(item)
+
+        self._highlighted_item = None
+        if widgets:
+            container.mount_all(widgets)
 
     def _highlight_selected(self) -> None:
         """Update the visual highlight for the selected conversation."""
-        container = self.query_one("#conversation-list", HiddenScrollVertical)
-        items = list(container.query(ConversationItem))
-        for i, item in enumerate(items):
-            if i == self.selected_index:
-                item.add_class("--selected")
-            else:
-                item.remove_class("--selected")
-        if items and 0 <= self.selected_index < len(items):
-            items[self.selected_index].scroll_visible()
+        if not 0 <= self.selected_index < len(self._items):
+            return
+        item = self._items[self.selected_index]
+        if self._highlighted_item is not item:
+            if self._highlighted_item is not None:
+                self._highlighted_item.remove_class("--selected")
+            item.add_class("--selected")
+            self._highlighted_item = item
+        item.scroll_visible(animate=False)
 
     def action_cursor_up(self) -> None:
         """Move selection up."""
@@ -559,9 +594,7 @@ class ChatList(Widget):
 
     def on_click(self, event) -> None:
         """Handle click on a conversation item."""
-        container = self.query_one("#conversation-list", HiddenScrollVertical)
-        items = list(container.query(ConversationItem))
-        for i, item in enumerate(items):
+        for i, item in enumerate(self._items):
             if item is event.widget or item in event.widget.ancestors_with_self:
                 if self.selected_index == i:
                     self.post_message(self.OpenSession(self._filtered[i].conversation))
